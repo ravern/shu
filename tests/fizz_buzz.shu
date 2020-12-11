@@ -1,0 +1,13 @@
+use std::option
+
+pub fn fizz_buzz(n) {
+  if n % 3 == 0 or n % 5 == 0 {
+    option::Some("FizzBuzz")
+  } else if n % 3 == 0 {
+    option::Some("Fizz")
+  } else if n % 5 == 0  {
+    option::Some("Buzz")
+  } else {
+    option::None
+  }
+}

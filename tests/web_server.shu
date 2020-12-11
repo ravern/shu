@@ -1,0 +1,22 @@
+use std::option
+use std::http::(server, request, response)
+
+fn root(connection) {
+  let name = match request::query(connection, "name") {
+    option::Some(name) { name }
+    option::None { "world" }
+  }
+
+  connection
+  |> response::status(200)
+  |> response::write("Hello, {name}!")
+}
+
+let options = server::Options {
+  host: [0, 0, 0, 0],
+  port: 3000,
+}
+
+server::new()
+|> server::get("/", root)
+|> server::listen(options)
