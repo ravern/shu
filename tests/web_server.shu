@@ -4,7 +4,7 @@ use std::http::(server, request, response)
 fn root(connection) {
   let name = match request::query(connection, "name") {
     option::Some(name) { name }
-    option::None { "world" }
+    option::None() { "world" }
   }
 
   connection
