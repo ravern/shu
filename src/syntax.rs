@@ -13,7 +13,7 @@ pub enum Stmt {
     name: Ident,
     body: File,
     public: bool,
-  }
+  },
 }
 
 pub enum FuncBody {
@@ -37,6 +37,7 @@ pub enum Expr {
   Tuple(Vec<Expr>),
   Record(Vec<(Ident, Expr)>),
   Closure {
+    // frame: Frame,
     parameters: Vec<Ident>,
     body: Block,
   },
@@ -50,13 +51,53 @@ pub enum Expr {
   If(If),
   Cond(Vec<(Expr, Block)>),
   Match(Box<Expr>, Vec<(Pattern, Block)>),
-  For(For),
+  For {
+    head: ForHead,
+    body: Block,
+  },
 }
 
 pub struct TypeIdent(Vec<Ident>);
 
 pub enum UnaryOp {
-  Negate, Not,
+  Negate,
+  Not,
+}
+
+pub enum BinaryOp {
+  Add,
+  Sub,
+  Mul,
+  Div,
+  Mod,
+  Greater,
+  Less,
+  Equal,
+  GreaterEqual,
+  LessEqual,
+  And,
+  Or,
+  Pipe,
+}
+
+pub enum Pattern {
+  Label(TypeIdent, Box<Pattern>),
+}
+
+pub struct If {
+  head: Box<Expr>,
+  body: Block,
+  tail: Option<IfTail>,
+}
+
+pub enum IfTail {
+  Else(Block),
+  ElseIf(Box<If>),
+}
+
+pub enum ForHead {
+  Cond(Box<Expr>),
+  Iter(Pattern, Box<Expr>),
 }
 
 pub struct Ident(Intern<String>);
