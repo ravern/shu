@@ -1,5 +1,5 @@
 mod syntax;
 
-fn run() {
+pub fn run() {
   println!("Hello, Shu!");
 }

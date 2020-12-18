@@ -5,5 +5,4 @@ authors = ["Ravern Koh <ravernkoh@gmail.com>"]
 edition = "2018"
 
 [dependencies]
-combine = "4.4.0"
 internment = "0.4.1"
