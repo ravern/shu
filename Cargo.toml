@@ -6,3 +6,4 @@ edition = "2018"
 
 [dependencies]
 internment = "0.4.1"
+fallible-iterator = "0.2.0"

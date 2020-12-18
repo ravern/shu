@@ -1,6 +1,6 @@
-use internment::Intern;
+use crate::common::ident::Ident;
 
-pub struct File(Vec<Stmt>);
+pub struct File(pub Vec<Stmt>);
 
 pub enum Stmt {
   Func {
@@ -87,17 +87,16 @@ pub enum Pattern {
 pub struct If {
   head: Box<Expr>,
   body: Block,
-  tail: Option<IfTail>,
+  tail: IfTail,
 }
 
 pub enum IfTail {
   Else(Block),
   ElseIf(Box<If>),
+  Done,
 }
 
 pub enum ForHead {
   Cond(Box<Expr>),
   Iter(Pattern, Box<Expr>),
 }
-
-pub struct Ident(Intern<String>);

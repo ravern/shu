@@ -1,0 +1,26 @@
+use crate::common::ident::Ident;
+
+pub enum Token {
+  Int(i64),
+  Float(f64),
+  Bool(bool),
+  String(String),
+  Ident(Ident),
+  Add,
+  Sub,
+  Mul,
+  Div,
+  Mod,
+  Greater,
+  Less,
+  Equal,
+  And,
+  Pipe,
+  LeftParen,
+  RightParen,
+  LeftBrace,
+  RightBrace,
+  LeftBracket,
+  RightBracket,
+  DoubleColon,
+}
