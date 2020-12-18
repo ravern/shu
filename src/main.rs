@@ -1,5 +1,3 @@
-mod ast;
-
 fn main() {
-    println!("Hello, world!");
+  shu::run();
 }
