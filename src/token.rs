@@ -26,4 +26,5 @@ pub enum Token {
   LeftBracket,
   RightBracket,
   DoubleColon,
+  Newline,
 }
