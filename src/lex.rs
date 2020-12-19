@@ -7,7 +7,7 @@ where
   S: FallibleIterator<Item = char, Error = E>,
 {
   let mut lexer = Lexer::new(source);
-  lexer.lex_all_tokens()
+  lexer.tokens().collect()
 }
 
 pub struct Lexer<S, E>
@@ -27,12 +27,28 @@ where
     }
   }
 
-  pub fn lex_all_tokens(&mut self) -> Result<Vec<Token>, LexError<E>> {
-    Ok(vec![])
+  pub fn tokens(&mut self) -> Tokens<S, E> {
+    Tokens(self)
   }
 
   pub fn lex_token(&mut self) -> Result<Option<Token>, LexError<E>> {
     Ok(None)
+  }
+}
+
+pub struct Tokens<'a, S, E>(&'a mut Lexer<S, E>)
+where
+  S: FallibleIterator<Item = char, Error = E>;
+
+impl<'a, S, E> FallibleIterator for Tokens<'a, S, E>
+where
+  S: FallibleIterator<Item = char, Error = E>,
+{
+  type Item = Token;
+  type Error = LexError<E>;
+
+  fn next(&mut self) -> Result<Option<Self::Item>, Self::Error> {
+    self.0.lex_token()
   }
 }
 

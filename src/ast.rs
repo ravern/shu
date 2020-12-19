@@ -51,10 +51,6 @@ pub enum Expr {
   If(If),
   Cond(Vec<(Expr, Block)>),
   Match(Box<Expr>, Vec<(Pattern, Block)>),
-  For {
-    head: ForHead,
-    body: Block,
-  },
 }
 
 pub struct TypeIdent(Vec<Ident>);
@@ -94,9 +90,4 @@ pub enum IfTail {
   Else(Block),
   ElseIf(Box<If>),
   Done,
-}
-
-pub enum ForHead {
-  Cond(Box<Expr>),
-  Iter(Pattern, Box<Expr>),
 }
