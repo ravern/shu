@@ -1,25 +1,6 @@
 use internment::Intern;
 
-pub struct Pos {
-  from: usize,
-  to: usize,
-}
-
-pub struct Span {
-  line: Pos,
-  column: Pos,
-}
-
-pub struct Spanned<T> {
-  span: Span,
-  item: T,
-}
-
-impl<T> Spanned<T> {
-  pub fn new(span: Span, item: T) -> Spanned<T> {
-    Spanned { span, item }
-  }
-}
+use crate::common::span::Spanned;
 
 pub enum Stmt {
   Use(UseTree),
@@ -40,23 +21,34 @@ pub enum Expr {
   Match(Match),
 }
 
+pub struct UseTree {
+  prefix: Spanned<Path>,
+  kind: UseTreeKind,
+}
+
+pub enum UseTreeKind {
+  Leaf(Spanned<Ident>),
+  Branch(Vec<Spanned<UseTree>>),
+}
+
 pub struct ModDef {
   name: Ident,
   body: Option<ModBody>,
+  public: bool,
 }
 
 pub struct ModBody {
-  span: Span,
-  stmts: Vec<Stmt>,
+  stmts: Vec<Spanned<Stmt>>,
 }
 
 pub struct FnDef {
   name: Ident,
   body: Option<FnBody>,
+  public: bool,
 }
 
 pub struct FnBody {
-  exprs: Vec<Expr>,
+  block: Block,
   template: Option<Path>,
 }
 
@@ -70,18 +62,18 @@ pub enum Lit {
 
 pub struct Label {
   label: Spanned<Path>,
-  arg: Spanned<Box<Expr>>,
+  arg: Box<Spanned<Expr>>,
 }
 
 pub struct Assign {
   lhs: Spanned<Pat>,
-  rhs: Spanned<Box<Expr>>,
+  rhs: Box<Spanned<Expr>>,
 }
 
 pub struct BinOp {
   kind: BinOpKind,
-  lhs: Spanned<Box<Expr>>,
-  rhs: Spanned<Box<Expr>>,
+  lhs: Box<Spanned<Expr>>,
+  rhs: Box<Spanned<Expr>>,
 }
 
 pub enum BinOpKind {
@@ -98,11 +90,12 @@ pub enum BinOpKind {
   Lte,
   Eq,
   Neq,
+  Pipe,
 }
 
 pub struct UnOp {
   kind: UnOpKind,
-  arg: Spanned<Box<Expr>>,
+  arg: Box<Spanned<Expr>>,
 }
 
 pub enum UnOpKind {
@@ -111,7 +104,7 @@ pub enum UnOpKind {
 }
 
 pub struct If {
-  cond: Spanned<Box<Expr>>,
+  head: Box<Spanned<Expr>>,
   body: Block,
   else_: Else,
 }
@@ -120,6 +113,15 @@ pub enum Else {
   Empty,
   Else(Block),
   If(Box<If>),
+}
+
+pub struct Cond {
+  arms: Vec<(Box<Spanned<Expr>>, Box<Spanned<Expr>>)>,
+}
+
+pub struct Match {
+  head: Box<Spanned<Expr>>,
+  arms: Vec<(Spanned<Pat>, Box<Spanned<Expr>>)>,
 }
 
 pub enum Pat {
@@ -131,10 +133,12 @@ pub enum Pat {
 
 pub struct LabelPat {
   label: Spanned<Path>,
-  arg: Spanned<Box<Pat>>,
+  arg: Box<Spanned<Pat>>,
 }
 
-pub struct UseTree {}
+pub struct Block {
+  exprs: Vec<Spanned<Expr>>,
+}
 
 pub struct Path {
   idents: Vec<Ident>,
