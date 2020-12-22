@@ -1,24 +1,26 @@
-use std::(
+use std.(
   option,
-  http::(server, request, response),
+  http.(server, request, response),
 )
 
-fn root(connection) {
-  name = match request::query(connection, "name") {
-    option::Some(name) { name }
-    option::None() { "world" }
+fun root(connection) {
+  name = match request.query(connection, "name") {
+    option.Some(name) { name }
+    option.None() { "world" }
   }
 
   connection
-  | response::status(200)
-  | response::write("Hello, {name}!")
+  |> response.status(200)
+  |> response.write("Hello, {name}!")
 }
 
-options = server::Options {
-  host: [0, 0, 0, 0],
-  port: 3000,
-}
+fun main() {
+  options = server.Options {
+    host: [0, 0, 0, 0],
+    port: 3000,
+  }
 
-server::new()
-| server::get("/", root)
-| server::listen(options)
+  server.new()
+  |> server.get("/", root)
+  |> server.listen(options)
+}
