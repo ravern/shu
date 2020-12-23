@@ -3,5 +3,5 @@ mod common;
 mod parse;
 
 pub fn run() {
-  println!("Hello, world!")
+  println!("Hello, world!");
 }
