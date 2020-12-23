@@ -13,9 +13,9 @@ pub enum Expr {
   Tuple(Vec<Spanned<Expr>>),
   Record(Vec<(Spanned<Ident>, Spanned<Expr>)>),
   Label(Label),
-  Assign(Assign),
-  BinOp(BinOp),
-  UnOp(UnOp),
+  Assign(Spanned<Pat>, Box<Spanned<Ident>>),
+  BinOp(BinOpKind, Box<Spanned<Ident>>, Box<Spanned<Ident>>),
+  UnOp(UnOpKind, Box<Spanned<Ident>>),
   If(If),
   Cond(Cond),
   Match(Match),
@@ -65,17 +65,6 @@ pub struct Label {
   arg: Box<Spanned<Expr>>,
 }
 
-pub struct Assign {
-  lhs: Spanned<Pat>,
-  rhs: Box<Spanned<Expr>>,
-}
-
-pub struct BinOp {
-  kind: BinOpKind,
-  lhs: Box<Spanned<Expr>>,
-  rhs: Box<Spanned<Expr>>,
-}
-
 pub enum BinOpKind {
   Add,
   Sub,
@@ -93,11 +82,6 @@ pub enum BinOpKind {
   Pipe,
 }
 
-pub struct UnOp {
-  kind: UnOpKind,
-  arg: Box<Spanned<Expr>>,
-}
-
 pub enum UnOpKind {
   Neg,
   Not,
@@ -111,7 +95,7 @@ pub struct If {
 
 pub enum Else {
   Empty,
-  Else(Block),
+  Block(Block),
   If(Box<If>),
 }
 
