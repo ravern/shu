@@ -1,34 +1,46 @@
+#[derive(Debug, PartialEq)]
 pub struct Pos {
-  from: usize,
-  to: usize,
+  line: usize,
+  column: usize,
 }
 
 impl Pos {
-  pub fn new(from: usize, to: usize) -> Pos {
-    Pos { from, to }
+  pub fn new(line: usize, column: usize) -> Pos {
+    Pos { line, column }
   }
 }
 
 impl From<(usize, usize)> for Pos {
   fn from(pos: (usize, usize)) -> Pos {
     Pos {
-      from: pos.0,
-      to: pos.1,
+      line: pos.0,
+      column: pos.1,
     }
   }
 }
 
+#[derive(Debug, PartialEq)]
 pub struct Span {
-  lines: Pos,
-  columns: Pos,
+  from: Pos,
+  to: Pos,
 }
 
 impl Span {
-  pub fn new(lines: Pos, columns: Pos) -> Span {
-    Span { lines, columns }
+  pub fn new(from: Pos, to: Pos) -> Span {
+    Span { from, to }
   }
 }
 
+impl From<((usize, usize), (usize, usize))> for Span {
+  fn from(span: ((usize, usize), (usize, usize))) -> Span {
+    Span {
+      from: span.0.into(),
+      to: span.1.into(),
+    }
+  }
+}
+
+#[derive(Debug, PartialEq)]
 pub struct Spanned<T> {
   span: Span,
   item: T,

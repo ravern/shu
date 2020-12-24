@@ -1,3 +1,4 @@
+#[derive(Debug, PartialEq)]
 pub enum Token {
   Int(i64),
   Float(f64),
@@ -23,5 +24,5 @@ pub enum Token {
   RBrace,
   LBracket,
   RBracket,
-  Err,
+  Comment(String),
 }
