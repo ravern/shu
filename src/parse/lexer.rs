@@ -35,21 +35,15 @@ where
   }
 
   pub fn token(&mut self) -> Result<Spanned<Token>, LexError> {
-    let char = match self.source.peek() {
-      Some(char) => char,
-      None => {
-        return Err(LexError::Unexpected {
-          unexpected: Unexpected::Eof,
-          expected: None,
-        })
-      }
-    };
-
-    let from = Pos::new(self.line, self.column);
+    let from = self.pos();
 
     // Match against first char for all tokens, and perform early return
     // for non-single-char tokens.
-    let token = match char {
+    let token = match self.peek() {
+      '+' => Token::Add,
+      '-' => Token::Sub,
+      '*' => Token::Mul,
+      '%' => Token::Rem,
       '.' => Token::Dot,
       '(' => Token::LParen,
       ')' => Token::RParen,
@@ -57,42 +51,95 @@ where
       '}' => Token::RBrace,
       '[' => Token::LBracket,
       ']' => Token::RBracket,
-      _ => {
+      '/' => return self.slash(),
+      char => {
         return Err(LexError::Unexpected {
+          pos: from,
           unexpected: Unexpected::Char(*char),
           expected: None,
         })
       }
     };
 
-    // Advance past matched char.
-    self.advance().unwrap();
+    self.advance();
+
+    Ok(Spanned::new(Span::new(from, self.pos()), token))
+  }
+
+  fn slash(&mut self) -> Result<Spanned<Token>, LexError> {
+    let from = self.pos();
+
+    self.expect('/');
+
+    let token = match self.peek() {
+      '/' => return self.line_comment(),
+      _ => Token::Div,
+    };
+
+    self.advance();
+
+    Ok(Spanned::new(Span::new(from, self.pos()), token))
+  }
+
+  fn line_comment(&mut self) -> Result<Spanned<Token>, LexError> {
+    // Exclude the preceding slashes from the comment span.
+    self.expect('/');
+
+    let from = self.pos();
+
+    let mut chars = Vec::new();
+    loop {
+      match self.source.peek() {
+        Some('\n') => break,
+        Some(_) => chars.push(self.advance()),
+        None => break,
+      };
+    }
 
     Ok(Spanned::new(
-      Span::new(from, Pos::new(self.line, self.column)),
-      token,
+      Span::new(from, self.pos()),
+      Token::Comment(chars.into_iter().collect()),
     ))
   }
 
-  pub fn advance(&mut self) -> Option<char> {
-    let char = match self.source.next() {
-      Some(char) => char,
-      None => return None,
-    };
+  fn peek(&mut self) -> &char {
+    self.source.peek().expect("no char to peek")
+  }
+
+  // Advances by one char and returns it.
+  fn advance(&mut self) -> char {
+    let char = self.source.next().expect("no char to advance");
 
     self.column += 1;
-
     if char == '\n' {
       self.line += 1;
     }
 
-    Some(char)
+    char
+  }
+
+  // Advances and asserts that the char is the given one.
+  fn expect(&mut self, expected_char: char) -> char {
+    let char = self.advance();
+
+    assert_eq!(
+      char, expected_char,
+      "expected char '{}', but got {}'",
+      char, expected_char
+    );
+
+    char
+  }
+
+  fn pos(&self) -> Pos {
+    Pos::new(self.line, self.column)
   }
 }
 
 #[derive(Debug, PartialEq)]
 pub enum LexError {
   Unexpected {
+    pos: Pos,
     unexpected: Unexpected,
     expected: Option<Vec<Expected>>,
   },
@@ -115,6 +162,18 @@ mod tests {
   use crate::{common::span::Spanned, parse::token::Token};
 
   use super::Lexer;
+
+  #[test]
+  fn line_comment() {
+    let mut lexer = Lexer::new("// This is a test comment.".chars());
+    assert_eq!(
+      lexer.next(),
+      Some(Ok(Spanned::new(
+        ((1, 3), (1, 27)).into(),
+        Token::Comment(" This is a test comment.".to_string())
+      )))
+    );
+  }
 
   #[test]
   fn parens() {

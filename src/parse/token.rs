@@ -7,6 +7,7 @@ pub enum Token {
   Add,
   Sub,
   Mul,
+  Div,
   Rem,
   Dot,
   And,
