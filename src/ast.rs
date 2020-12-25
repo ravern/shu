@@ -4,16 +4,17 @@ use crate::common::span::Spanned;
 
 pub enum Stmt {
   Use(UseTree),
+  TypeDef(TypeDef),
   ModDef(ModDef),
   FnDef(FnDef),
 }
 
 pub enum Expr {
   Lit(Lit),
-  Tuple(Vec<Spanned<Expr>>),
-  Record(Vec<(Spanned<Ident>, Spanned<Expr>)>),
-  Label(Label),
-  Assign(Spanned<Pat>, Box<Spanned<Ident>>),
+  Tup(Vec<Spanned<Expr>>),
+  Rec(Vec<(Spanned<Ident>, Spanned<Expr>)>),
+  Cons(Cons),
+  AssOp(Spanned<Pat>, Box<Spanned<Ident>>),
   BinOp(BinOpKind, Box<Spanned<Ident>>, Box<Spanned<Ident>>),
   UnOp(UnOpKind, Box<Spanned<Ident>>),
   If(If),
@@ -31,8 +32,13 @@ pub enum UseTreeKind {
   Branch(Vec<Spanned<UseTree>>),
 }
 
+pub struct TypeDef {
+  name: Spanned<Ident>,
+  public: bool,
+}
+
 pub struct ModDef {
-  name: Ident,
+  name: Spanned<Ident>,
   body: Option<ModBody>,
   public: bool,
 }
@@ -42,7 +48,7 @@ pub struct ModBody {
 }
 
 pub struct FnDef {
-  name: Ident,
+  name: Spanned<Ident>,
   body: Option<FnBody>,
   public: bool,
 }
@@ -60,8 +66,8 @@ pub enum Lit {
   Bool(bool),
 }
 
-pub struct Label {
-  label: Spanned<Path>,
+pub struct Cons {
+  type_: Spanned<Path>,
   arg: Box<Spanned<Expr>>,
 }
 
@@ -110,13 +116,13 @@ pub struct Match {
 
 pub enum Pat {
   Lit(Lit),
-  Tuple(Vec<Spanned<Pat>>),
-  Record(Vec<(Spanned<Ident>, Spanned<Pat>)>),
-  Label(LabelPat),
+  Tup(Vec<Spanned<Pat>>),
+  Rec(Vec<(Spanned<Ident>, Spanned<Pat>)>),
+  Cons(ConsPat),
 }
 
-pub struct LabelPat {
-  label: Spanned<Path>,
+pub struct ConsPat {
+  type_: Spanned<Path>,
   arg: Box<Spanned<Pat>>,
 }
 
