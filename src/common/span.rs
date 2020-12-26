@@ -37,4 +37,11 @@ impl<T> Spanned<T> {
   pub fn item(&self) -> &T {
     &self.item
   }
+
+  pub fn map<F, U>(self, mut f: F) -> Spanned<U>
+  where
+    F: FnMut(T) -> U,
+  {
+    Spanned::new(self.span, f(self.item))
+  }
 }

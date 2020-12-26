@@ -1,11 +1,9 @@
 use std::{fs::File, path::Path};
 
-use crate::{ast::ModBody, common::span::Spanned};
-
-pub use self::error::ParseError;
+use crate::{ast::ModBody, common::span::Spanned, parse::error::ParseError};
 
 mod error;
-mod read;
+mod lex;
 mod token;
 
 pub fn parse_path<P>(path: P) -> Result<Spanned<ModBody>, ParseError>

@@ -7,17 +7,17 @@ pub struct Source {
 }
 
 impl Source {
-  pub fn new(contents: String, path: PathBuf) -> Rc<Source> {
-    Rc::new(Source {
-      contents,
-      path: Some(path),
-    })
-  }
-
-  pub fn with_contents(contents: String) -> Rc<Source> {
+  pub fn new(contents: String) -> Rc<Source> {
     Rc::new(Source {
       contents,
       path: None,
+    })
+  }
+
+  pub fn with_path(contents: String, path: PathBuf) -> Rc<Source> {
+    Rc::new(Source {
+      contents,
+      path: Some(path),
     })
   }
 
