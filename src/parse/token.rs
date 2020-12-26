@@ -33,6 +33,7 @@ pub enum Token {
   Comment(String),
   Keyword(Keyword),
   Newline,
+  Eof,
 }
 
 #[derive(Clone, Debug, PartialEq)]

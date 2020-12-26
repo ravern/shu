@@ -25,13 +25,15 @@ impl Lexer {
     }
   }
 
-  pub fn is_done(&self) -> bool {
-    // TODO: check for whitespace
-    self.offset == self.source.contents().len()
-  }
-
   pub fn next(&mut self) -> Result<Spanned<Token>, ParseError> {
     self.whitespace()?;
+
+    if self.is_done() {
+      return Ok(Spanned::new(
+        Span::new(&self.source, self.offset, 0),
+        Token::Eof,
+      ));
+    }
 
     match self.peek()?.item() {
       b'/' => return self.div_or_comment(),
@@ -256,6 +258,10 @@ impl Lexer {
     ))
   }
 
+  fn is_done(&self) -> bool {
+    self.offset == self.source.contents().len()
+  }
+
   fn peek(&self) -> Result<Spanned<u8>, ParseError> {
     self
       .source
@@ -346,6 +352,16 @@ mod tests {
   };
 
   use super::Lexer;
+
+  #[test]
+  fn eof() {
+    let source = Source::new("    ".to_string());
+    let mut lexer = Lexer::new(&source);
+    assert_eq!(
+      lexer.next().unwrap(),
+      Spanned::new(Span::new(&source, 4, 0), Token::Eof)
+    );
+  }
 
   #[test]
   fn newline() {
