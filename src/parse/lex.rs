@@ -34,7 +34,7 @@ impl Lexer {
     self.whitespace()?;
 
     match self.peek()?.item() {
-      b'/' => return self.slash(),
+      b'/' => return self.div_or_comment(),
       b'&' => return self.and(),
       b'|' => return self.or_or_pipe(),
       b'>' => return self.gt_or_gte(),
@@ -47,7 +47,6 @@ impl Lexer {
     }
 
     Ok(self.advance()?.map(|byte| match byte {
-      b'\n' => Token::Newline,
       b'+' => Token::Add,
       b'-' => Token::Sub,
       b'*' => Token::Mul,
@@ -59,6 +58,7 @@ impl Lexer {
       b'}' => Token::RBrace,
       b'[' => Token::LBracket,
       b']' => Token::RBracket,
+      b'\n' => Token::Newline,
       _ => unimplemented!(),
     }))
   }
@@ -75,7 +75,7 @@ impl Lexer {
     Ok(())
   }
 
-  fn slash(&mut self) -> Result<Spanned<Token>, ParseError> {
+  fn div_or_comment(&mut self) -> Result<Spanned<Token>, ParseError> {
     let div = self.expect(b'/')?;
 
     match self.peek()?.item() {
@@ -179,10 +179,11 @@ impl Lexer {
     }
 
     let len = bytes.len();
+    let int_or_float = String::from_utf8(bytes).unwrap();
     let token = if is_float {
-      Token::Float(String::from_utf8(bytes).unwrap().parse().unwrap())
+      Token::Float(int_or_float.parse().unwrap())
     } else {
-      Token::Int(String::from_utf8(bytes).unwrap().parse().unwrap())
+      Token::Int(int_or_float.parse().unwrap())
     };
 
     Ok(Spanned::new(Span::new(&self.source, offset, len), token))
@@ -241,10 +242,10 @@ impl Lexer {
 
     let mut bytes = Vec::new();
     loop {
-      let next_bytes = (*self.advance()?.item(), *self.advance()?.item());
+      let next_bytes = (*self.advance()?.item(), *self.peek()?.item());
       bytes.push(next_bytes.0);
-      bytes.push(next_bytes.1);
       if next_bytes == (b'*', b'/') {
+        bytes.push(*self.advance()?.item());
         break;
       }
     }
