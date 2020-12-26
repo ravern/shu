@@ -1,6 +1,4 @@
-use internment::Intern;
-
-use crate::common::span::Spanned;
+use crate::common::{ident::Ident, span::Spanned};
 
 pub enum Stmt {
   Use(UseTree),
@@ -133,5 +131,3 @@ pub struct Block {
 pub struct Path {
   idents: Vec<Ident>,
 }
-
-pub struct Ident(Intern<String>);
