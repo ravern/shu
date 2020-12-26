@@ -1,41 +1,20 @@
-#[derive(Debug, PartialEq)]
-pub struct Pos {
-  line: usize,
-  column: usize,
-}
+use std::rc::Rc;
 
-impl Pos {
-  pub fn new(line: usize, column: usize) -> Pos {
-    Pos { line, column }
-  }
-}
-
-impl From<(usize, usize)> for Pos {
-  fn from(pos: (usize, usize)) -> Pos {
-    Pos {
-      line: pos.0,
-      column: pos.1,
-    }
-  }
-}
+use crate::common::source::Source;
 
 #[derive(Debug, PartialEq)]
 pub struct Span {
-  from: Pos,
-  to: Pos,
+  source: Option<Rc<Source>>,
+  offset: usize,
+  len: usize,
 }
 
 impl Span {
-  pub fn new(from: Pos, to: Pos) -> Span {
-    Span { from, to }
-  }
-}
-
-impl From<((usize, usize), (usize, usize))> for Span {
-  fn from(span: ((usize, usize), (usize, usize))) -> Span {
+  pub fn new(source: &Rc<Source>, offset: usize, len: usize) -> Span {
     Span {
-      from: span.0.into(),
-      to: span.1.into(),
+      source: Some(Rc::clone(source)),
+      offset,
+      len,
     }
   }
 }
