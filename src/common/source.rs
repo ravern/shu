@@ -2,12 +2,30 @@ use std::{path::PathBuf, rc::Rc};
 
 #[derive(Debug, PartialEq)]
 pub struct Source {
-  source: String,
-  path: PathBuf,
+  contents: String,
+  path: Option<PathBuf>,
 }
 
 impl Source {
-  pub fn new(source: String, path: PathBuf) -> Rc<Source> {
-    Rc::new(Source { source, path })
+  pub fn new(contents: String, path: PathBuf) -> Rc<Source> {
+    Rc::new(Source {
+      contents,
+      path: Some(path),
+    })
+  }
+
+  pub fn with_contents(contents: String) -> Rc<Source> {
+    Rc::new(Source {
+      contents,
+      path: None,
+    })
+  }
+
+  pub fn contents(&self) -> &str {
+    &self.contents
+  }
+
+  pub fn len(&self) -> usize {
+    self.contents.len()
   }
 }
