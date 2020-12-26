@@ -35,6 +35,12 @@ impl Lexer {
 
     match self.peek()?.item() {
       b'/' => return self.slash(),
+      b'&' => return self.and(),
+      b'|' => return self.or_or_pipe(),
+      b'>' => return self.gt_or_gte(),
+      b'<' => return self.lt_or_lte(),
+      b'=' => return self.ass_or_eq(),
+      b'!' => return self.not_or_neq(),
       byte if is_digit(byte) => return self.int_or_float(),
       byte if is_ident_prefix(byte) => return self.ident_or_keyword(),
       _ => {}
@@ -70,7 +76,7 @@ impl Lexer {
   }
 
   fn slash(&mut self) -> Result<Spanned<Token>, ParseError> {
-    let spanned = self.expect(b'/')?;
+    let div = self.expect(b'/')?;
 
     match self.peek()?.item() {
       b'/' => {
@@ -81,8 +87,79 @@ impl Lexer {
         self.retreat();
         self.block_comment()
       }
-      _ => Ok(spanned.map(|_| Token::Div)),
+      _ => Ok(div.map(|_| Token::Div)),
     }
+  }
+
+  fn and(&mut self) -> Result<Spanned<Token>, ParseError> {
+    self.two_byte_op((b'&', b'&'), Token::And)
+  }
+
+  fn or_or_pipe(&mut self) -> Result<Spanned<Token>, ParseError> {
+    self.expect(b'|')?;
+
+    match self.peek()?.item() {
+      b'|' => {
+        self.retreat();
+        self.two_byte_op((b'|', b'|'), Token::Or)
+      }
+      b'>' => {
+        self.retreat();
+        self.two_byte_op((b'|', b'>'), Token::Pipe)
+      }
+      _ => unimplemented!(),
+    }
+  }
+
+  fn gt_or_gte(&mut self) -> Result<Spanned<Token>, ParseError> {
+    self.one_or_two_byte_op((b'>', b'='), Token::Gt, Token::Gte)
+  }
+
+  fn lt_or_lte(&mut self) -> Result<Spanned<Token>, ParseError> {
+    self.one_or_two_byte_op((b'<', b'='), Token::Lt, Token::Lte)
+  }
+
+  fn ass_or_eq(&mut self) -> Result<Spanned<Token>, ParseError> {
+    self.one_or_two_byte_op((b'=', b'='), Token::Ass, Token::Eq)
+  }
+
+  fn not_or_neq(&mut self) -> Result<Spanned<Token>, ParseError> {
+    self.one_or_two_byte_op((b'!', b'='), Token::Not, Token::Neq)
+  }
+
+  fn one_or_two_byte_op(
+    &mut self,
+    bytes: (u8, u8),
+    one_byte_token: Token,
+    two_byte_token: Token,
+  ) -> Result<Spanned<Token>, ParseError> {
+    let first = self.expect(bytes.0)?;
+
+    if self.is_done() {
+      return Ok(first.map(|_| one_byte_token.clone()));
+    }
+
+    match self.peek()?.item() {
+      byte if byte == &bytes.1 => {
+        self.retreat();
+        self.two_byte_op((bytes.0, bytes.1), two_byte_token)
+      }
+      _ => Ok(first.map(|_| one_byte_token.clone())),
+    }
+  }
+
+  fn two_byte_op(
+    &mut self,
+    bytes: (u8, u8),
+    token: Token,
+  ) -> Result<Spanned<Token>, ParseError> {
+    let first = self.expect(bytes.0)?;
+    let second = self.expect(bytes.1)?;
+
+    Ok(Spanned::new(
+      Span::combine(first.span(), second.span()),
+      token,
+    ))
   }
 
   fn int_or_float(&mut self) -> Result<Spanned<Token>, ParseError> {
@@ -339,6 +416,35 @@ mod tests {
         Token::Ident(Ident::new("bar".to_string()))
       )
     );
+  }
+
+  #[test]
+  fn ops() {
+    let source =
+      Source::new("+ - * / % . |> && || > >= < <= == != ! =".to_string());
+    let mut lexer = Lexer::new(&source);
+    let spanneds = vec![
+      Spanned::new(Span::new(&source, 0, 1), Token::Add),
+      Spanned::new(Span::new(&source, 2, 1), Token::Sub),
+      Spanned::new(Span::new(&source, 4, 1), Token::Mul),
+      Spanned::new(Span::new(&source, 6, 1), Token::Div),
+      Spanned::new(Span::new(&source, 8, 1), Token::Rem),
+      Spanned::new(Span::new(&source, 10, 1), Token::Dot),
+      Spanned::new(Span::new(&source, 12, 2), Token::Pipe),
+      Spanned::new(Span::new(&source, 15, 2), Token::And),
+      Spanned::new(Span::new(&source, 18, 2), Token::Or),
+      Spanned::new(Span::new(&source, 21, 1), Token::Gt),
+      Spanned::new(Span::new(&source, 23, 2), Token::Gte),
+      Spanned::new(Span::new(&source, 26, 1), Token::Lt),
+      Spanned::new(Span::new(&source, 28, 2), Token::Lte),
+      Spanned::new(Span::new(&source, 31, 2), Token::Eq),
+      Spanned::new(Span::new(&source, 34, 2), Token::Neq),
+      Spanned::new(Span::new(&source, 37, 1), Token::Not),
+      Spanned::new(Span::new(&source, 39, 1), Token::Ass),
+    ];
+    for spanned in spanneds {
+      assert_eq!(lexer.next().unwrap(), spanned);
+    }
   }
 
   #[test]

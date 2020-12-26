@@ -1,6 +1,6 @@
 use crate::common::ident::Ident;
 
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum Token {
   Int(i64),
   Float(f64),
@@ -13,6 +13,7 @@ pub enum Token {
   Div,
   Rem,
   Dot,
+  Pipe,
   And,
   Or,
   Gt,
@@ -22,7 +23,7 @@ pub enum Token {
   Eq,
   Neq,
   Not,
-  Assign,
+  Ass,
   LParen,
   RParen,
   LBrace,
@@ -34,7 +35,7 @@ pub enum Token {
   Newline,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum Keyword {
   Mod,
   Fun,

@@ -1,6 +1,6 @@
 use internment::Intern;
 
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Ident(Intern<String>);
 
 impl Ident {

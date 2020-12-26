@@ -17,6 +17,27 @@ impl Span {
       len,
     }
   }
+
+  pub fn combine(first: &Span, second: &Span) -> Span {
+    if first.source != second.source {
+      panic!("can't combine two Spans with separate sources")
+    }
+
+    let offset = first.offset.min(second.offset);
+    let end = first.end().max(second.end());
+    let length = end - offset;
+
+    // TODO: Handle spans without sources
+    return Span::new(&first.source.as_ref().unwrap(), offset, length);
+  }
+
+  pub fn start(&self) -> usize {
+    self.offset
+  }
+
+  pub fn end(&self) -> usize {
+    self.offset + self.len
+  }
 }
 
 #[derive(Debug, PartialEq)]
