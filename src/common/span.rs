@@ -2,7 +2,7 @@ use std::rc::Rc;
 
 use crate::common::source::Source;
 
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Span {
   source: Option<Rc<Source>>,
   offset: usize,

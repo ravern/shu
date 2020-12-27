@@ -7,7 +7,7 @@ use crate::{
     span::{Span, Spanned},
   },
   parse::{
-    error::ParseError,
+    error::{Expected, ParseError},
     token::{Keyword, Token},
   },
 };
@@ -36,33 +36,32 @@ impl Lexer {
     }
 
     match self.peek()?.item() {
-      b'/' => return self.div_or_comment(),
-      b'&' => return self.and(),
-      b'|' => return self.or_or_pipe(),
-      b'>' => return self.gt_or_gte(),
-      b'<' => return self.lt_or_lte(),
-      b'=' => return self.ass_or_eq(),
-      b'!' => return self.not_or_neq(),
-      byte if is_digit(byte) => return self.int_or_float(),
-      byte if is_ident_prefix(byte) => return self.ident_or_keyword(),
-      _ => {}
+      b'/' => self.div_or_comment(),
+      b'&' => self.and(),
+      b'|' => self.or_or_pipe(),
+      b'>' => self.gt_or_gte(),
+      b'<' => self.lt_or_lte(),
+      b'=' => self.ass_or_eq(),
+      b'!' => self.not_or_neq(),
+      b'+' => self.one_byte_op(Token::Add),
+      b'-' => self.one_byte_op(Token::Sub),
+      b'*' => self.one_byte_op(Token::Mul),
+      b'%' => self.one_byte_op(Token::Rem),
+      b'.' => self.one_byte_op(Token::Dot),
+      b'(' => self.one_byte_op(Token::LParen),
+      b')' => self.one_byte_op(Token::RParen),
+      b'{' => self.one_byte_op(Token::LBrace),
+      b'}' => self.one_byte_op(Token::RBrace),
+      b'[' => self.one_byte_op(Token::LBracket),
+      b']' => self.one_byte_op(Token::RBracket),
+      b'\n' => self.one_byte_op(Token::Newline),
+      byte if is_digit(byte) => self.int_or_float(),
+      byte if is_ident_prefix(byte) => self.ident_or_keyword(),
+      byte => Err(ParseError::new(
+        Span::new(&self.source, self.offset, 0),
+        Expected::Byte(*byte),
+      )),
     }
-
-    Ok(self.advance()?.map(|byte| match byte {
-      b'+' => Token::Add,
-      b'-' => Token::Sub,
-      b'*' => Token::Mul,
-      b'%' => Token::Rem,
-      b'.' => Token::Dot,
-      b'(' => Token::LParen,
-      b')' => Token::RParen,
-      b'{' => Token::LBrace,
-      b'}' => Token::RBrace,
-      b'[' => Token::LBracket,
-      b']' => Token::RBracket,
-      b'\n' => Token::Newline,
-      _ => unimplemented!(),
-    }))
   }
 
   fn whitespace(&mut self) -> Result<(), ParseError> {
@@ -75,6 +74,13 @@ impl Lexer {
       self.advance()?;
     }
     Ok(())
+  }
+
+  fn one_byte_op(
+    &mut self,
+    token: Token,
+  ) -> Result<Spanned<Token>, ParseError> {
+    Ok(self.advance()?.map(|_| token.clone()))
   }
 
   fn div_or_comment(&mut self) -> Result<Spanned<Token>, ParseError> {
@@ -109,7 +115,13 @@ impl Lexer {
         self.retreat();
         self.two_byte_op((b'|', b'>'), Token::Pipe)
       }
-      _ => unimplemented!(),
+      _ => {
+        self.retreat();
+        Err(ParseError::new(
+          Span::new(&self.source, self.offset, 0),
+          Expected::Byte(b'|'),
+        ))
+      }
     }
   }
 
@@ -172,7 +184,12 @@ impl Lexer {
     while !self.is_done() {
       match self.peek()?.item() {
         b'.' if !is_float => is_float = true,
-        b'.' => unimplemented!(),
+        b'.' => {
+          return Err(ParseError::new(
+            Span::new(&self.source, self.offset, 0),
+            Expected::Byte(b'.'),
+          ))
+        }
         b'_' => {}
         byte if is_digit(byte) => {}
         _ => break,
@@ -201,7 +218,11 @@ impl Lexer {
         byte if is_ident_suffix(byte) => {
           bytes.push(*self.advance()?.item());
           if is_ident(self.peek()?.item()) {
-            unimplemented!();
+            self.retreat();
+            return Err(ParseError::new(
+              Span::new(&self.source, self.offset, 0),
+              Expected::Byte(*self.advance()?.item()),
+            ));
           }
           break;
         }

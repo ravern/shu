@@ -1,11 +1,34 @@
+use std::fmt;
+
 use thiserror::Error;
 
-#[derive(Debug, Error)]
-pub enum ParseError {
-  #[error("{0}")]
-  Syntax(#[from] SyntaxError),
-}
+use crate::common::span::Span;
 
 #[derive(Debug, Error)]
-#[error("invalid syntax")]
-pub struct SyntaxError {}
+pub struct ParseError {
+  span: Span,
+  unexpected: Expected,
+  expected: Option<Vec<Expected>>,
+}
+
+impl ParseError {
+  pub fn new(span: Span, unexpected: Expected) -> ParseError {
+    ParseError {
+      span,
+      unexpected,
+      expected: None,
+    }
+  }
+}
+
+impl fmt::Display for ParseError {
+  fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+    write!(fmt, "test")
+  }
+}
+
+#[derive(Debug)]
+pub enum Expected {
+  Byte(u8),
+  Eof,
+}

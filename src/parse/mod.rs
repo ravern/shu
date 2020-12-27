@@ -10,18 +10,18 @@ pub fn parse_path<P>(path: P) -> Result<Spanned<ModBody>, ParseError>
 where
   P: AsRef<Path>,
 {
-  Err(ParseError::Syntax(error::SyntaxError {}))
+  unimplemented!();
 }
 
 pub fn parse_file(file: File) -> Result<Spanned<ModBody>, ParseError> {
-  Err(ParseError::Syntax(error::SyntaxError {}))
+  unimplemented!();
 }
 
 pub fn parse_str<S>(str: S) -> Result<Spanned<ModBody>, ParseError>
 where
   S: AsRef<str>,
 {
-  Err(ParseError::Syntax(error::SyntaxError {}))
+  unimplemented!();
 }
 
 #[cfg(test)]
