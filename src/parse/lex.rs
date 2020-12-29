@@ -35,7 +35,7 @@ impl Lexer {
       ));
     }
 
-    match self.peek()?.item() {
+    match self.peek().item() {
       b'/' => self.div_or_comment(),
       b'&' => self.and(),
       b'|' => self.or_or_pipe(),
@@ -66,12 +66,12 @@ impl Lexer {
 
   fn whitespace(&mut self) -> Result<(), ParseError> {
     while !self.is_done() {
-      match self.peek()?.item() {
+      match self.peek().item() {
         b'\n' => break,
         byte if is_whitespace(byte) => {}
         _ => break,
       }
-      self.advance()?;
+      self.advance();
     }
     Ok(())
   }
@@ -80,13 +80,13 @@ impl Lexer {
     &mut self,
     token: Token,
   ) -> Result<Spanned<Token>, ParseError> {
-    Ok(self.advance()?.map(|_| token.clone()))
+    Ok(self.advance().map(|_| token.clone()))
   }
 
   fn div_or_comment(&mut self) -> Result<Spanned<Token>, ParseError> {
-    let div = self.expect(b'/')?;
+    let div = self.expect(b'/');
 
-    match self.peek()?.item() {
+    match self.peek().item() {
       b'/' => {
         self.retreat();
         self.comment()
@@ -104,9 +104,9 @@ impl Lexer {
   }
 
   fn or_or_pipe(&mut self) -> Result<Spanned<Token>, ParseError> {
-    self.expect(b'|')?;
+    self.expect(b'|');
 
-    match self.peek()?.item() {
+    match self.peek().item() {
       b'|' => {
         self.retreat();
         self.two_byte_op((b'|', b'|'), Token::Or)
@@ -147,13 +147,13 @@ impl Lexer {
     one_byte_token: Token,
     two_byte_token: Token,
   ) -> Result<Spanned<Token>, ParseError> {
-    let first = self.expect(bytes.0)?;
+    let first = self.expect(bytes.0);
 
     if self.is_done() {
       return Ok(first.map(|_| one_byte_token.clone()));
     }
 
-    match self.peek()?.item() {
+    match self.peek().item() {
       byte if byte == &bytes.1 => {
         self.retreat();
         self.two_byte_op((bytes.0, bytes.1), two_byte_token)
@@ -167,8 +167,8 @@ impl Lexer {
     bytes: (u8, u8),
     token: Token,
   ) -> Result<Spanned<Token>, ParseError> {
-    let first = self.expect(bytes.0)?;
-    let second = self.expect(bytes.1)?;
+    let first = self.expect(bytes.0);
+    let second = self.expect(bytes.1);
 
     Ok(Spanned::new(
       Span::combine(first.span(), second.span()),
@@ -182,7 +182,7 @@ impl Lexer {
     let mut is_float = false;
     let mut bytes = Vec::new();
     while !self.is_done() {
-      match self.peek()?.item() {
+      match self.peek().item() {
         b'.' if !is_float => is_float = true,
         b'.' => {
           return Err(ParseError::new(
@@ -194,7 +194,7 @@ impl Lexer {
         byte if is_digit(byte) => {}
         _ => break,
       }
-      bytes.push(*self.advance()?.item());
+      bytes.push(*self.advance().item());
     }
 
     let len = bytes.len();
@@ -213,22 +213,22 @@ impl Lexer {
 
     let mut bytes = Vec::new();
     while !self.is_done() {
-      match self.peek()?.item() {
+      match self.peek().item() {
         byte if is_ident(byte) => {}
         byte if is_ident_suffix(byte) => {
-          bytes.push(*self.advance()?.item());
-          if is_ident(self.peek()?.item()) {
+          bytes.push(*self.advance().item());
+          if is_ident(self.peek().item()) {
             self.retreat();
             return Err(ParseError::new(
               Span::new(&self.source, self.offset, 0),
-              Expected::Byte(*self.advance()?.item()),
+              Expected::Byte(*self.advance().item()),
             ));
           }
           break;
         }
         _ => break,
       }
-      bytes.push(*self.advance()?.item());
+      bytes.push(*self.advance().item());
     }
 
     let len = bytes.len();
@@ -247,7 +247,7 @@ impl Lexer {
 
     let mut bytes = Vec::new();
     while !self.is_done() {
-      let next_byte = *self.advance()?.item();
+      let next_byte = *self.advance().item();
       bytes.push(next_byte);
       if next_byte == b'\n' {
         break;
@@ -265,10 +265,10 @@ impl Lexer {
 
     let mut bytes = Vec::new();
     loop {
-      let next_bytes = (*self.advance()?.item(), *self.peek()?.item());
+      let next_bytes = (*self.advance().item(), *self.peek().item());
       bytes.push(next_bytes.0);
       if next_bytes == (b'*', b'/') {
-        bytes.push(*self.advance()?.item());
+        bytes.push(*self.advance().item());
         break;
       }
     }
@@ -283,33 +283,38 @@ impl Lexer {
     self.offset == self.source.contents().len()
   }
 
-  fn peek(&self) -> Result<Spanned<u8>, ParseError> {
-    self
+  fn peek(&self) -> Spanned<u8> {
+    let byte = *self
       .source
       .contents()
       .as_bytes()
       .get(self.offset)
-      .ok_or_else(|| unimplemented!())
-      .map(|byte| Spanned::new(Span::new(&self.source, self.offset, 1), *byte))
+      .expect("lexer tried to peek when already done");
+
+    Spanned::new(Span::new(&self.source, self.offset, 1), byte)
   }
 
-  fn advance(&mut self) -> Result<Spanned<u8>, ParseError> {
-    let byte = self.peek()?;
+  fn advance(&mut self) -> Spanned<u8> {
+    let byte = self.peek();
     self.offset += 1;
-    Ok(byte)
+    byte
   }
 
   fn retreat(&mut self) {
     self.offset -= 1;
   }
 
-  fn expect(&mut self, byte: u8) -> Result<Spanned<u8>, ParseError> {
-    let spanned = self.advance()?;
-    if spanned.item() == &byte {
-      Ok(spanned)
-    } else {
-      unimplemented!();
-    }
+  fn expect(&mut self, expected_byte: u8) -> Spanned<u8> {
+    let spanned = self.advance();
+    let byte = *spanned.item();
+
+    assert_eq!(
+      byte, expected_byte,
+      "lexer expected '{}' but advanced into '{}'",
+      byte as char, expected_byte as char,
+    );
+
+    spanned
   }
 }
 
