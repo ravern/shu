@@ -1,3 +1,3 @@
-# Shu
+# Om
 
 Dynamic functional programming language.
