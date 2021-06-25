@@ -1,9 +1,4 @@
-[package]
-name = "om"
-version = "0.1.0"
-authors = ["Ravern Koh <ravernkoh@gmail.com>"]
-edition = "2018"
-
-[dependencies]
-internment = "0.4.1"
-thiserror = "1.0"
+[workspace]
+members = [
+  "crates/om-ast",
+]
