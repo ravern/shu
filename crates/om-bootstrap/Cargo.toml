@@ -1,0 +1,7 @@
+[package]
+name = "om-bootstrap"
+version = "0.0.1"
+authors = ["Ravern Koh <ravernkoh@gmail.com>"]
+edition = "2018"
+
+[dependencies]

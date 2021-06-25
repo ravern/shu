@@ -3,5 +3,9 @@
 version = 3
 
 [[package]]
-name = "om-ast"
+name = "om"
+version = "0.0.1"
+
+[[package]]
+name = "om-bootstrap"
 version = "0.0.1"
