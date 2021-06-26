@@ -3,17 +3,17 @@
 version = 3
 
 [[package]]
-name = "om"
+name = "oma"
 version = "0.0.1"
 
 [[package]]
-name = "om-bootstrap"
+name = "oma-bootstrap"
 version = "0.0.1"
 
 [[package]]
-name = "om-tests"
+name = "oma-tests"
 version = "0.0.1"
 dependencies = [
- "om",
- "om-bootstrap",
+ "oma",
+ "oma-bootstrap",
 ]

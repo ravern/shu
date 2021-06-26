@@ -1,8 +1,0 @@
-[package]
-name = "om-tests"
-version = "0.0.1"
-edition = "2018"
-
-[dependencies]
-om = { path = "../om" }
-om-bootstrap = { path = "../om-bootstrap" }

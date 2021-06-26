@@ -1,12 +1,12 @@
-use om::Machine;
-use om_bootstrap::Compiler;
+use oma::Machine;
+use oma_bootstrap::Compiler;
 
 enum Error {
-  Compile(om_bootstrap::CompileError),
-  Execution(om::Error),
+  Compile(oma_bootstrap::CompileError),
+  Execution(oma::Error),
 }
 
-const SOURCE: &'static str = include_str!("../src/hello_world.om");
+const SOURCE: &'static str = include_str!("../src/hello_world.oma");
 
 fn main() -> Result<(), Error> {
   let compiler = Compiler::new();
