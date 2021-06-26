@@ -1,4 +1,4 @@
 pub enum Error {
   SegmentationFault,
-  InvalidOp(u8),
+  UnsupportedOp(u8),
 }

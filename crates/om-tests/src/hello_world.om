@@ -1,0 +1,4 @@
+(import console)
+
+(def-fn main ()
+    (console/print "Hello, world!"))

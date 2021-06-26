@@ -9,3 +9,11 @@ version = "0.0.1"
 [[package]]
 name = "om-bootstrap"
 version = "0.0.1"
+
+[[package]]
+name = "om-tests"
+version = "0.0.1"
+dependencies = [
+ "om",
+ "om-bootstrap",
+]
