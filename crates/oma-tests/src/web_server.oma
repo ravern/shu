@@ -1,23 +1,22 @@
 (import http)
 
 (def index
-    (lambda (connection)
-        (-> connection
-            (http/connection/write \"Hello, world\"))))
+  (lambda (connection)
+    (http/connection/write connection \"Hello, world\"))))
 
 (def submit
   (lambda (connection)
-      ((lambda (body)
-           (http/connection/write connection body)))
-          (http/connection/get-param \"body\"))))
+    ((lambda (body)
+       (http/connection/write connection body))
+     (http/connection/get-param \"body\"))))
 
 (def main 
-    (lambda ()
-        ((lambda (server)
-             (http/server/listen (http/server/post (http/server/get server
-                                                                    \"/\"
-                                                                    index)
-                                                   \"/submit\"
-                                                   submit)
-                                 \"0.0.0.0:8000\")))
-            (http/server/new))))
+  (lambda ()
+    ((lambda (server)
+       (http/server/listen (http/server/post (http/server/get server
+                                                              \"/\"
+                                                              index)
+                                             \"/submit\"
+                                             submit)
+                           \"0.0.0.0:8000\"))
+     (http/server/new))))
