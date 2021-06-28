@@ -1,9 +1,20 @@
 use std::iter::Peekable;
 
-use crate::{ast::*, error::Error};
+use thiserror::Error;
 
-pub fn parse(source: &str) -> Result<Vec<Expr>, Error> {
+use crate::ast::*;
+
+#[derive(Debug, Error)]
+pub enum ParseError {
+  #[error("unexpected end of file")]
+  UnexpectedEof,
+  #[error("unexpected char: {0}")]
+  UnexpectedChar(char),
+}
+
+pub fn parse(source: &str) -> Result<Vec<Expr>, ParseError> {
   let mut parser = Parser::new(source.chars());
+
   let mut exprs = Vec::new();
   loop {
     match parser.try_expr()? {
@@ -11,6 +22,7 @@ pub fn parse(source: &str) -> Result<Vec<Expr>, Error> {
       None => break,
     }
   }
+
   Ok(exprs)
 }
 
@@ -31,14 +43,14 @@ where
     }
   }
 
-  fn try_expr(&mut self) -> Result<Option<Expr>, Error> {
+  fn try_expr(&mut self) -> Result<Option<Expr>, ParseError> {
     match self.try_peek()? {
       Some(_) => Ok(Some(self.expr()?)),
       None => Ok(None),
     }
   }
 
-  fn expr(&mut self) -> Result<Expr, Error> {
+  fn expr(&mut self) -> Result<Expr, ParseError> {
     let expr = match self.peek()? {
       '(' => Expr::List(self.list()?),
       _ => Expr::Atom(self.atom()?),
@@ -47,7 +59,7 @@ where
     Ok(expr)
   }
 
-  fn list(&mut self) -> Result<List, Error> {
+  fn list(&mut self) -> Result<List, ParseError> {
     self.expect('(')?;
 
     let mut exprs = Vec::new();
@@ -68,14 +80,14 @@ where
     Ok(list)
   }
 
-  fn atom(&mut self) -> Result<Atom, Error> {
+  fn atom(&mut self) -> Result<Atom, ParseError> {
     match self.peek()? {
       char if char.is_digit(10) => self.number(),
       _ => self.ident().map(Atom::Ident),
     }
   }
 
-  fn number(&mut self) -> Result<Atom, Error> {
+  fn number(&mut self) -> Result<Atom, ParseError> {
     let mut chars = Vec::new();
     let mut has_decimal = false;
 
@@ -85,7 +97,7 @@ where
         Some(char) if char.is_digit(10) => {}
         Some(')') => break,
         Some(char) if char.is_whitespace() => break,
-        Some(char) => return Err(Error::UnexpectedChar(char)),
+        Some(char) => return Err(ParseError::UnexpectedChar(char)),
         None => break,
       }
       chars.push(self.next()?)
@@ -108,7 +120,7 @@ where
     }
   }
 
-  fn ident(&mut self) -> Result<String, Error> {
+  fn ident(&mut self) -> Result<String, ParseError> {
     let mut chars = Vec::new();
 
     loop {
@@ -133,29 +145,29 @@ where
     }
   }
 
-  fn expect(&mut self, char: char) -> Result<(), Error> {
+  fn expect(&mut self, char: char) -> Result<(), ParseError> {
     if self.next()? == char {
       self.whitespace();
       Ok(())
     } else {
-      Err(Error::UnexpectedChar(char))
+      Err(ParseError::UnexpectedChar(char))
     }
   }
 
-  fn try_next(&mut self) -> Result<Option<char>, Error> {
+  fn try_next(&mut self) -> Result<Option<char>, ParseError> {
     Ok(self.source.next())
   }
 
-  fn next(&mut self) -> Result<char, Error> {
-    self.try_next()?.ok_or(Error::UnexpectedEof)
+  fn next(&mut self) -> Result<char, ParseError> {
+    self.try_next()?.ok_or(ParseError::UnexpectedEof)
   }
 
-  fn try_peek(&mut self) -> Result<Option<char>, Error> {
+  fn try_peek(&mut self) -> Result<Option<char>, ParseError> {
     Ok(self.source.peek().cloned())
   }
 
-  fn peek(&mut self) -> Result<char, Error> {
-    self.try_peek()?.ok_or(Error::UnexpectedEof)
+  fn peek(&mut self) -> Result<char, ParseError> {
+    self.try_peek()?.ok_or(ParseError::UnexpectedEof)
   }
 }
 
