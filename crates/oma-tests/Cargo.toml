@@ -1,8 +1,0 @@
-[package]
-name = "oma-tests"
-version = "0.0.1"
-edition = "2018"
-
-[dependencies]
-oma = { path = "../oma" }
-oma-bootstrap = { path = "../oma-bootstrap" }
