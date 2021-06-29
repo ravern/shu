@@ -1,0 +1,7 @@
+(letrec ((n 5)
+         (fac (lambda (n) (* n (fac (- n 1))))))
+  (fac n))
+
+((lambda (n fac) (fac fac n))
+ 5
+ (lambda (fac n) (* n (fac fac (- n 1)))))
