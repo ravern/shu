@@ -1,0 +1,8 @@
+(defmod modules/foo)
+(defmod modules/bar)
+
+(defmod modules/baz
+  (defn two () 2))
+
+(defn main ()
+  (modules/foo/add (modules/bar/one) (modules/baz/two)))
