@@ -1,7 +1,17 @@
-pub struct Machine {}
+use crate::{context::Context, error::Error};
+
+struct Machine {
+  context: Context,
+}
 
 impl Machine {
-  pub fn new() -> Machine {
-    Machine {}
+  fn new() -> Machine {
+    Machine {
+      context: Context::new(),
+    }
+  }
+
+  fn run_file(&mut self, path: &str) -> Result<(), Error> {
+    Ok(())
   }
 }

@@ -1,18 +1,35 @@
-(require "./foo" foo)
-(require "./bar" bar)
-(require "./baz" baz)
+(mod foo)
+(mod bar)
+
+(mod baz
+  ((fn two () 2)))
+
+(fn a-dummy-function ()
+  ())
 
 (fn main ()
   (foo/add (bar/one) (baz/two)))
 
+(main)
 
 
 
 
 
 
-(let ((foo/add (lambda (left right) (+ left right))))
-  (let ((bar/one (lambda () 1)))
-    (let ((baz/two (lambda () 2)))
-      (let ((main (lambda () (foo/add (bar/one) (baz/two)))))
-        (main)))))
+
+
+
+
+
+
+
+
+
+(lambda ()
+  (let ((foo/add (lambda (left right) (+ left right))))
+    (let ((bar/one (lambda () 1)))
+      (let ((baz/two (lambda () 2)))
+        (let ((main (lambda () (foo/add (bar/one) (baz/two))))
+              (a-dummy-function (lambda () ())))
+          (main))))))
