@@ -1,8 +1,18 @@
-(defmod modules/foo)
-(defmod modules/bar)
+(require "./foo" foo)
+(require "./bar" bar)
+(require "./baz" baz)
 
-(defmod modules/baz
-  (defn two () 2))
+(fn main ()
+  (foo/add (bar/one) (baz/two)))
 
-(defn main ()
-  (modules/foo/add (modules/bar/one) (modules/baz/two)))
+
+
+
+
+
+
+(let ((foo/add (lambda (left right) (+ left right))))
+  (let ((bar/one (lambda () 1)))
+    (let ((baz/two (lambda () 2)))
+      (let ((main (lambda () (foo/add (bar/one) (baz/two)))))
+        (main)))))
