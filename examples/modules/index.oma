@@ -33,3 +33,25 @@
         (let ((main (lambda () (foo/add (bar/one) (baz/two))))
               (a-dummy-function (lambda () ())))
           (main))))))
+
+
+
+
+
+
+
+
+
+
+
+
+
+(fn factorial (n)
+  (* n (factorial (- n 1))))
+
+
+
+
+(lambda ()
+  (letrec ((math/factorial (lambda (n) (* n (factorial (- n 1))))))
+    (main)))
