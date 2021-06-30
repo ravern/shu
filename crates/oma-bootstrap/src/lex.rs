@@ -51,6 +51,7 @@ pub enum Token {
   Mod,
   Use,
   Fn,
+  Trait,
   Struct,
   Enum,
   Impl,
@@ -67,6 +68,8 @@ pub enum Token {
   LtEq,
   Eq,
   EqEq,
+  Bang,
+  BangEq,
   LParen,
   RParen,
   LBrace,
@@ -82,7 +85,9 @@ pub enum Token {
   Eof,
 }
 
-pub enum LexError {}
+pub enum LexError {
+  UnexpectedEof,
+}
 
 pub struct Lexer<S>
 where
@@ -101,7 +106,7 @@ where
     }
   }
 
-  pub fn next_token(&mut self) -> Option<Token> {
-    None
+  pub fn next_token(&mut self) -> Result<Token, LexError> {
+    Ok(Token::Eof)
   }
 }
