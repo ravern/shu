@@ -10,6 +10,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "oma-bootstrap"
+version = "0.1.0"
+
+[[package]]
 name = "proc-macro2"
 version = "1.0.27"
 source = "registry+https://github.com/rust-lang/crates.io-index"
