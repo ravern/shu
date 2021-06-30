@@ -1,3 +1,0 @@
-- [x] Copy over old parsing code into parse.rs
-- [ ] Design bytecode and build emitter
-- [ ] Attempt to run basic problems like (+ 2 3)
