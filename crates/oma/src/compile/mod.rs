@@ -8,8 +8,3 @@ mod parse;
 //    "undefined symbol" errors when calling `fn` and
 //    `mod`.
 
-pub fn compile_file(
-  context: &mut Context,
-  path: &str,
-) -> Result<Lambda, Error> {
-}
