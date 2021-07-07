@@ -1,4 +1,4 @@
-use crate::lex::{Spanned, Token};
+use crate::{common::Spanned, token::Token};
 
 pub enum Stmt {
   Use(Use),

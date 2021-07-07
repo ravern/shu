@@ -1,0 +1,22 @@
+fn a_function() {
+  print("foo");
+}
+
+fn main() {
+  let an_int: i64 = 42;
+  let a_float: f64 = 3.14159;
+  let a_string: str = "foo";
+  let a_bool: bool = true;
+
+  let addition = 2 + 3;
+  let subtraction = 3 - 5;
+  let multiplication = 8 * 0.5;
+  let division = 9 / 2;
+
+  let concatenation = "Hello, " + "world!";
+
+  let mutation = 3;
+  mutation = 5;
+
+  a_function();
+}

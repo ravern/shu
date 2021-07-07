@@ -3,13 +3,13 @@
 version = 3
 
 [[package]]
+name = "oma"
+version = "0.1.0"
+
+[[package]]
 name = "oma-bootstrap"
 version = "0.1.0"
 
 [[package]]
 name = "oma-cli"
-version = "0.1.0"
-
-[[package]]
-name = "shu"
 version = "0.1.0"

@@ -1,6 +1,6 @@
 use std::iter::Peekable;
 
-use crate::lex::{LexError, Token};
+use crate::{lex::LexError, token::Token};
 
 pub enum ParseError {
   Lex(LexError),

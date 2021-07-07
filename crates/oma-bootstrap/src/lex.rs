@@ -1,112 +1,157 @@
-use std::{
-  cmp::{max, min},
-  iter::Peekable,
+use crate::{
+  common::{Source, Span, Spanned},
+  token::Token,
 };
 
-pub struct Spanned<T> {
-  span: Span,
-  base: T,
+#[derive(Debug, PartialEq)]
+pub enum LexError {
+  UnexpectedChar(u8),
+  UnexpectedEof,
 }
 
-impl<T> Spanned<T> {
-  pub fn span(&self) -> Span {
-    self.span
-  }
-
-  pub fn base(&self) -> &T {
-    &self.base
-  }
-}
-
-#[derive(Clone, Copy)]
-pub struct Span {
+pub struct Lexer {
+  source: Source,
+  line: usize,
+  column: usize,
   start: usize,
   end: usize,
 }
 
-impl Span {
-  pub fn new(start: usize, end: usize) -> Span {
-    if start >= end {
-      panic!("start of span must be before end");
-    }
-    Span { start, end }
-  }
-
-  pub fn combine(&self, other: Span) -> Span {
-    Span {
-      start: min(self.start, other.start),
-      end: max(self.end, other.end),
-    }
-  }
-}
-
-pub enum Token {
-  // Literals
-  Int(i64),
-  Float(f64),
-  Bool(bool),
-  String(String),
-  Ident(String),
-  // Keywords
-  Mod,
-  Use,
-  Fn,
-  Trait,
-  Struct,
-  Enum,
-  Impl,
-  Let,
-  If,
-  For,
-  While,
-  Loop,
-  Match,
-  // Punctuation
-  Gt,
-  Lt,
-  GtEq,
-  LtEq,
-  Eq,
-  EqEq,
-  Bang,
-  BangEq,
-  LParen,
-  RParen,
-  LBrace,
-  RBrace,
-  LBracket,
-  RBracket,
-  Comma,
-  Semi,
-  Col,
-  ColCol,
-  // Misc.
-  Comment(String),
-  Eof,
-}
-
-pub enum LexError {
-  UnexpectedEof,
-}
-
-pub struct Lexer<S>
-where
-  S: Iterator<Item = Spanned<char>>,
-{
-  source: Peekable<S>,
-}
-
-impl<S> Lexer<S>
-where
-  S: Iterator<Item = Spanned<char>>,
-{
-  pub fn new(source: S) -> Lexer<S> {
+impl Lexer {
+  pub fn new(source: &str) -> Lexer {
     Lexer {
-      source: source.peekable(),
+      source: Source::new(source),
+      line: 0,
+      column: 0,
+      start: 0,
+      end: 0,
     }
   }
 
-  pub fn next_token(&mut self) -> Result<Token, LexError> {
-    Ok(Token::Eof)
+  pub fn source(&self) -> &Source {
+    &self.source
+  }
+
+  pub fn collect(mut self) -> Vec<Result<Spanned<Token>, LexError>> {
+    let mut tokens = Vec::new();
+
+    loop {
+      let token_result = self.next();
+
+      if let Ok(token) = &token_result {
+        if let Token::Eof = token.base() {
+          tokens.push(token_result);
+          break;
+        }
+      }
+
+      tokens.push(token_result)
+    }
+
+    tokens
+  }
+
+  pub fn next(&mut self) -> Result<Spanned<Token>, LexError> {
+    self.start = self.end;
+
+    let token = match self.peek() {
+      Some(b'+') => self.build_and_advance(Token::Plus),
+      Some(b'-') => self.build_and_advance(Token::Hyphen),
+      Some(b'*') => self.build_and_advance(Token::Asterisk),
+      Some(b'/') => self.build_and_advance(Token::Slash),
+      Some(byte) if is_digit(byte) => self.number()?,
+      Some(byte) => return Err(LexError::UnexpectedChar(byte)),
+      None => self.build(Token::Eof),
+    };
+
+    Ok(token)
+  }
+
+  fn number(&mut self) -> Result<Spanned<Token>, LexError> {
+    let mut is_float = false;
+
+    loop {
+      match self.peek() {
+        Some(b'.') if !is_float => {
+          is_float = true;
+          self.advance();
+        }
+        Some(byte) if is_digit(byte) => {
+          self.advance();
+        }
+        Some(_) => break,
+        None => break,
+      }
+    }
+
+    if is_float {
+      Ok(self.build(Token::Float))
+    } else {
+      Ok(self.build(Token::Int))
+    }
+  }
+
+  fn build(&self, token: Token) -> Spanned<Token> {
+    Spanned::new(
+      token,
+      Span::new(
+        self.source.clone(),
+        self.line,
+        self.column,
+        self.start,
+        self.end,
+      ),
+    )
+  }
+
+  fn build_and_advance(&mut self, token: Token) -> Spanned<Token> {
+    self.advance();
+    self.build(token)
+  }
+
+  fn peek(&self) -> Option<u8> {
+    self.source.get(self.end)
+  }
+
+  fn advance(&mut self) -> Option<u8> {
+    self.end += 1;
+    self.source.get(self.end - 1)
+  }
+
+  fn expect(&mut self, expected: u8) -> Result<u8, LexError> {
+    match self.advance() {
+      Some(byte) if byte == expected => Ok(byte),
+      Some(byte) => Err(LexError::UnexpectedChar(byte)),
+      None => Err(LexError::UnexpectedEof),
+    }
+  }
+}
+
+fn is_digit(byte: u8) -> bool {
+  byte >= b'0' && byte <= b'9'
+}
+
+#[cfg(test)]
+mod tests {
+  use crate::{
+    common::{Span, Spanned},
+    token::Token,
+  };
+
+  use super::Lexer;
+
+  #[test]
+  fn int() {
+    let mut lexer = Lexer::new("1+1");
+    let source = lexer.source().clone();
+    let tokens = lexer.collect();
+
+    assert_eq!(
+      tokens,
+      vec![Ok(Spanned::new(
+        Token::Int,
+        Span::new(source.clone(), 0, 0, 0, 0)
+      ))]
+    );
   }
 }
