@@ -1,7 +1,7 @@
 use crate::{
-  ast::{BinaryExpression, Expression, LiteralExpression, UnaryExpression},
+  ast::Expression,
   lex::{LexError, Lexer},
-  span::{Span, Spanned},
+  span::{Source, Span, Spanned},
   token::Token,
 };
 
@@ -24,58 +24,71 @@ impl Parser {
     }
   }
 
-  pub fn parse(&mut self) -> Result<Spanned<Expression>, Spanned<ParseError>> {
-    self.expression()
+  pub fn source(&self) -> &Source {
+    self.lexer.source()
+  }
+
+  pub fn parse(&mut self) -> Spanned<Expression> {
+    self.expression().unwrap()
   }
 
   fn expression(&mut self) -> Result<Spanned<Expression>, Spanned<ParseError>> {
-    self.multiplication()
+    self.addition()
+  }
+
+  fn addition(&mut self) -> Result<Spanned<Expression>, Spanned<ParseError>> {
+    let mut left_operand = self.multiplication()?;
+
+    loop {
+      let operator = match self.peek()?.base() {
+        Token::Plus | Token::Hyphen => self.advance()?,
+        _ => return Ok(left_operand),
+      };
+
+      let right_operand = self.addition()?;
+
+      let span = Span::combine(
+        left_operand.span(),
+        &Span::combine(operator.span(), right_operand.span()),
+      );
+      left_operand = Spanned::new(
+        Expression::binary(operator, left_operand, right_operand),
+        span,
+      );
+    }
   }
 
   fn multiplication(
     &mut self,
   ) -> Result<Spanned<Expression>, Spanned<ParseError>> {
-    self.addition()
-  }
+    let mut left_operand = self.unary()?;
 
-  fn addition(&mut self) -> Result<Spanned<Expression>, Spanned<ParseError>> {
-    let left_operand = Box::new(self.unary()?);
+    loop {
+      let operator = match self.peek()?.base() {
+        Token::Asterisk | Token::Slash => self.advance()?,
+        _ => return Ok(left_operand),
+      };
 
-    let operator = match self.peek()?.base() {
-      Token::Plus | Token::Hyphen => self.advance()?,
-      _ => {
-        let token = self.advance()?;
-        return Err(token.map(ParseError::UnexpectedToken));
-      }
-    };
+      let right_operand = self.unary()?;
 
-    let right_operand = Box::new(self.unary()?);
-
-    let span = Span::combine(
-      left_operand.span(),
-      &Span::combine(operator.span(), right_operand.span()),
-    );
-    Ok(Spanned::new(
-      Expression::Binary(BinaryExpression {
-        operator,
-        left_operand,
-        right_operand,
-      }),
-      span,
-    ))
+      let span = Span::combine(
+        left_operand.span(),
+        &Span::combine(operator.span(), right_operand.span()),
+      );
+      left_operand = Spanned::new(
+        Expression::binary(operator, left_operand, right_operand),
+        span,
+      );
+    }
   }
 
   fn unary(&mut self) -> Result<Spanned<Expression>, Spanned<ParseError>> {
     match self.peek()?.base() {
       Token::Hyphen => {
         let operator = self.advance()?;
-        let operand = Box::new(self.unary()?);
+        let operand = self.unary()?;
         let span = Span::combine(operator.span(), operand.span());
-        let expression = Spanned::new(
-          Expression::Unary(UnaryExpression { operator, operand }),
-          span,
-        );
-        Ok(expression)
+        Ok(Spanned::new(Expression::unary(operator, operand), span))
       }
       _ => self.literal(),
     }
@@ -86,20 +99,16 @@ impl Parser {
       Token::Int => {
         let int = self.advance()?;
         let expression = Spanned::new(
-          Expression::Literal(LiteralExpression::Int(
-            int.span().as_str().parse().unwrap(),
-          )),
+          Expression::int(int.span().as_str().parse().unwrap()),
           int.span().clone(),
         );
         Ok(expression)
       }
       Token::Float => {
-        let int = self.advance()?;
+        let float = self.advance()?;
         let expression = Spanned::new(
-          Expression::Literal(LiteralExpression::Int(
-            int.span().as_str().parse().unwrap(),
-          )),
-          int.span().clone(),
+          Expression::float(float.span().as_str().parse().unwrap()),
+          float.span().clone(),
         );
         Ok(expression)
       }
@@ -159,11 +168,68 @@ impl Parser {
 
 #[cfg(test)]
 mod tests {
+  use pretty_assertions::assert_eq;
+
+  use crate::{
+    ast::Expression,
+    span::{Span, Spanned},
+    token::Token,
+  };
+
   use super::Parser;
 
   #[test]
-  fn addition() {
-    let mut parser = Parser::new("1 + 1");
-    dbg!(parser.parse());
+  fn operations() {
+    let mut parser = Parser::new("1 + 2 * 3 - 4 / 5");
+    let source = parser.source().clone();
+    let expression = parser.parse();
+
+    assert_eq!(
+      expression,
+      Spanned::new(
+        Expression::binary(
+          Spanned::new(Token::Plus, Span::new(source.clone(), 2, 3)),
+          Spanned::new(Expression::int(1), Span::new(source.clone(), 0, 1)),
+          Spanned::new(
+            Expression::binary(
+              Spanned::new(Token::Hyphen, Span::new(source.clone(), 10, 11)),
+              Spanned::new(
+                Expression::binary(
+                  Spanned::new(
+                    Token::Asterisk,
+                    Span::new(source.clone(), 6, 7)
+                  ),
+                  Spanned::new(
+                    Expression::int(2),
+                    Span::new(source.clone(), 4, 5)
+                  ),
+                  Spanned::new(
+                    Expression::int(3),
+                    Span::new(source.clone(), 8, 9)
+                  ),
+                ),
+                Span::new(source.clone(), 4, 9)
+              ),
+              Spanned::new(
+                Expression::binary(
+                  Spanned::new(Token::Slash, Span::new(source.clone(), 14, 15)),
+                  Spanned::new(
+                    Expression::int(4),
+                    Span::new(source.clone(), 12, 13)
+                  ),
+                  Spanned::new(
+                    Expression::int(5),
+                    Span::new(source.clone(), 16, 17)
+                  ),
+                ),
+                Span::new(source.clone(), 12, 17)
+              ),
+            ),
+            Span::new(source.clone(), 4, 17),
+          ),
+        ),
+        Span::new(source.clone(), 0, 17)
+      ),
+    );
   }
 }
