@@ -1,6 +1,7 @@
 mod ast;
-mod common;
 mod gen;
-mod lex;
 mod parse;
-mod token;
+
+pub mod lex;
+pub mod span;
+pub mod token;

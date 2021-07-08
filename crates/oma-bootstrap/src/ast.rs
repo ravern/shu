@@ -1,48 +1,27 @@
-use crate::{common::Spanned, token::Token};
+use crate::{span::Spanned, token::Token};
 
-pub enum Stmt {
-  Use(Use),
-  Mod(Mod),
-  Fn(Fn),
+#[derive(Debug)]
+pub enum Expression {
+  Literal(LiteralExpression),
+  Unary(UnaryExpression),
+  Binary(BinaryExpression),
 }
 
-pub struct Use {}
-
-pub struct Mod {
-  body: Vec<Stmt>,
+#[derive(Debug)]
+pub struct UnaryExpression {
+  pub operator: Spanned<Token>,
+  pub operand: Box<Spanned<Expression>>,
 }
 
-pub struct Fn {
-  params: Vec<Spanned<Token>>,
+#[derive(Debug)]
+pub struct BinaryExpression {
+  pub operator: Spanned<Token>,
+  pub left_operand: Box<Spanned<Expression>>,
+  pub right_operand: Box<Spanned<Expression>>,
 }
 
-pub struct Block {
-  exprs: Vec<Expr>,
+#[derive(Debug)]
+pub enum LiteralExpression {
+  Int(i64),
+  Float(f64),
 }
-
-pub enum Expr {
-  If(If),
-  Match(Match),
-}
-
-pub struct If {
-  if_body: Vec<Expr>,
-  else_body: Else,
-}
-
-pub enum Else {
-  Else(Vec<Expr>),
-  ElseIf(Box<If>),
-}
-
-pub struct Match {
-  subject: Box<Expr>,
-  arms: Vec<Arm>,
-}
-
-pub struct Arm {
-  pat: Pat,
-  body: Vec<Expr>,
-}
-
-pub enum Pat {}

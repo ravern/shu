@@ -1,5 +1,5 @@
 use crate::{
-  common::{Source, Span, Spanned},
+  span::{Source, Span, Spanned},
   token::Token,
 };
 
@@ -11,8 +11,6 @@ pub enum LexError {
 
 pub struct Lexer {
   source: Source,
-  line: usize,
-  column: usize,
   start: usize,
   end: usize,
 }
@@ -21,8 +19,6 @@ impl Lexer {
   pub fn new(source: &str) -> Lexer {
     Lexer {
       source: Source::new(source),
-      line: 0,
-      column: 0,
       start: 0,
       end: 0,
     }
@@ -32,42 +28,62 @@ impl Lexer {
     &self.source
   }
 
-  pub fn collect(mut self) -> Vec<Result<Spanned<Token>, LexError>> {
+  pub fn collect(mut self) -> Vec<Result<Spanned<Token>, Spanned<LexError>>> {
     let mut tokens = Vec::new();
 
     loop {
-      let token_result = self.next();
+      let result = self.next();
 
-      if let Ok(token) = &token_result {
-        if let Token::Eof = token.base() {
-          tokens.push(token_result);
+      if let Ok(spanned_token) = &result {
+        if let Token::Eof = spanned_token.base() {
+          tokens.push(result);
           break;
         }
       }
 
-      tokens.push(token_result)
+      tokens.push(result);
     }
 
     tokens
   }
 
-  pub fn next(&mut self) -> Result<Spanned<Token>, LexError> {
+  pub fn next(&mut self) -> Result<Spanned<Token>, Spanned<LexError>> {
+    self.whitespace();
+
     self.start = self.end;
 
-    let token = match self.peek() {
+    match self.peek() {
       Some(b'+') => self.build_and_advance(Token::Plus),
       Some(b'-') => self.build_and_advance(Token::Hyphen),
       Some(b'*') => self.build_and_advance(Token::Asterisk),
-      Some(b'/') => self.build_and_advance(Token::Slash),
-      Some(byte) if is_digit(byte) => self.number()?,
-      Some(byte) => return Err(LexError::UnexpectedChar(byte)),
+      Some(b'/') => {
+        self.advance();
+        match self.peek() {
+          Some(b'/') => self.comment(),
+          _ => self.build(Token::Slash),
+        }
+      }
+      Some(b'\n') => self.build_and_advance(Token::Newline),
+      Some(byte) if is_digit(byte) => self.number(),
+      Some(byte) => self.build_err_and_advance(LexError::UnexpectedChar(byte)),
       None => self.build(Token::Eof),
-    };
-
-    Ok(token)
+    }
   }
 
-  fn number(&mut self) -> Result<Spanned<Token>, LexError> {
+  fn comment(&mut self) -> Result<Spanned<Token>, Spanned<LexError>> {
+    loop {
+      match self.peek() {
+        Some(b'\n') => break,
+        None => break,
+        _ => {
+          self.advance();
+        }
+      }
+    }
+    self.build(Token::Comment)
+  }
+
+  fn number(&mut self) -> Result<Spanned<Token>, Spanned<LexError>> {
     let mut is_float = false;
 
     loop {
@@ -85,28 +101,54 @@ impl Lexer {
     }
 
     if is_float {
-      Ok(self.build(Token::Float))
+      self.build(Token::Float)
     } else {
-      Ok(self.build(Token::Int))
+      self.build(Token::Int)
     }
   }
 
-  fn build(&self, token: Token) -> Spanned<Token> {
-    Spanned::new(
-      token,
-      Span::new(
-        self.source.clone(),
-        self.line,
-        self.column,
-        self.start,
-        self.end,
-      ),
-    )
+  fn whitespace(&mut self) {
+    loop {
+      match self.peek() {
+        Some(byte) if is_whitespace(byte) => {
+          self.advance();
+        }
+        _ => break,
+      }
+    }
   }
 
-  fn build_and_advance(&mut self, token: Token) -> Spanned<Token> {
+  fn build(&self, token: Token) -> Result<Spanned<Token>, Spanned<LexError>> {
+    Ok(Spanned::new(
+      token,
+      Span::new(self.source.clone(), self.start, self.end),
+    ))
+  }
+
+  fn build_and_advance(
+    &mut self,
+    token: Token,
+  ) -> Result<Spanned<Token>, Spanned<LexError>> {
     self.advance();
     self.build(token)
+  }
+
+  fn build_err(
+    &self,
+    error: LexError,
+  ) -> Result<Spanned<Token>, Spanned<LexError>> {
+    Err(Spanned::new(
+      error,
+      Span::new(self.source.clone(), self.start, self.end),
+    ))
+  }
+
+  fn build_err_and_advance(
+    &mut self,
+    error: LexError,
+  ) -> Result<Spanned<Token>, Spanned<LexError>> {
+    self.advance();
+    self.build_err(error)
   }
 
   fn peek(&self) -> Option<u8> {
@@ -131,10 +173,14 @@ fn is_digit(byte: u8) -> bool {
   byte >= b'0' && byte <= b'9'
 }
 
+fn is_whitespace(byte: u8) -> bool {
+  byte == b'\r' || byte == b' ' || byte == b'\t'
+}
+
 #[cfg(test)]
 mod tests {
   use crate::{
-    common::{Span, Spanned},
+    span::{Span, Spanned},
     token::Token,
   };
 
@@ -142,16 +188,92 @@ mod tests {
 
   #[test]
   fn int() {
-    let mut lexer = Lexer::new("1+1");
+    let lexer = Lexer::new("42");
     let source = lexer.source().clone();
     let tokens = lexer.collect();
 
     assert_eq!(
       tokens,
-      vec![Ok(Spanned::new(
-        Token::Int,
-        Span::new(source.clone(), 0, 0, 0, 0)
-      ))]
+      vec![
+        Ok(Spanned::new(Token::Int, Span::new(source.clone(), 0, 2))),
+        Ok(Spanned::new(Token::Eof, Span::new(source.clone(), 2, 2))),
+      ]
+    );
+  }
+
+  #[test]
+  fn float() {
+    let lexer = Lexer::new("3.14");
+    let source = lexer.source().clone();
+    let tokens = lexer.collect();
+
+    assert_eq!(
+      tokens,
+      vec![
+        Ok(Spanned::new(Token::Float, Span::new(source.clone(), 0, 4))),
+        Ok(Spanned::new(Token::Eof, Span::new(source.clone(), 4, 4))),
+      ]
+    );
+  }
+
+  #[test]
+  fn newline() {
+    let lexer = Lexer::new("\n \n");
+    let source = lexer.source().clone();
+    let tokens = lexer.collect();
+
+    assert_eq!(
+      tokens,
+      vec![
+        Ok(Spanned::new(
+          Token::Newline,
+          Span::new(source.clone(), 0, 1)
+        )),
+        Ok(Spanned::new(
+          Token::Newline,
+          Span::new(source.clone(), 2, 3)
+        )),
+        Ok(Spanned::new(Token::Eof, Span::new(source.clone(), 3, 3))),
+      ]
+    );
+  }
+
+  #[test]
+  fn comment() {
+    let lexer = Lexer::new("// This is a comment");
+    let source = lexer.source().clone();
+    let tokens = lexer.collect();
+
+    assert_eq!(
+      tokens,
+      vec![
+        Ok(Spanned::new(
+          Token::Comment,
+          Span::new(source.clone(), 0, 20)
+        )),
+        Ok(Spanned::new(Token::Eof, Span::new(source.clone(), 20, 20))),
+      ]
+    );
+  }
+
+  #[test]
+  fn punctuation() {
+    let lexer = Lexer::new("+ - * /");
+    let source = lexer.source().clone();
+    let tokens = lexer.collect();
+
+    assert_eq!(
+      tokens,
+      vec![
+        Ok(Spanned::new(Token::Plus, Span::new(source.clone(), 0, 1))),
+        Ok(Spanned::new(Token::Hyphen, Span::new(source.clone(), 2, 3))),
+        Ok(Spanned::new(
+          Token::Asterisk,
+          Span::new(source.clone(), 4, 5)
+        )),
+        Ok(Spanned::new(Token::Slash, Span::new(source.clone(), 6, 7))),
+        Ok(Spanned::new(Token::Eof, Span::new(source.clone(), 7, 7))),
+      ]
     );
   }
 }

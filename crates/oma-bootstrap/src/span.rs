@@ -1,4 +1,7 @@
-use std::rc::Rc;
+use std::{
+  cmp::{max, min},
+  rc::Rc,
+};
 
 #[derive(Debug)]
 pub struct Spanned<T> {
@@ -17,6 +20,20 @@ impl<T> Spanned<T> {
 
   pub fn base(&self) -> &T {
     &self.base
+  }
+
+  pub fn unwrap(self) -> T {
+    self.base
+  }
+
+  pub fn map<F, U>(self, f: F) -> Spanned<U>
+  where
+    F: FnOnce(T) -> U,
+  {
+    Spanned {
+      base: f(self.base),
+      span: self.span,
+    }
   }
 }
 
@@ -44,30 +61,24 @@ where
 #[derive(Clone, Debug, PartialEq)]
 pub struct Span {
   source: Source,
-  line: usize,
-  column: usize,
   start: usize,
   end: usize,
 }
 
 impl Span {
-  pub fn new(
-    source: Source,
-    line: usize,
-    column: usize,
-    start: usize,
-    end: usize,
-  ) -> Span {
+  pub fn new(source: Source, start: usize, end: usize) -> Span {
     if source.len() < end {
       panic!("invalid bounds provided for span");
     }
-    Span {
-      source,
-      line,
-      column,
-      start,
-      end,
-    }
+    Span { source, start, end }
+  }
+
+  pub fn combine(left: &Span, right: &Span) -> Span {
+    Span::new(
+      left.source.clone(),
+      min(left.start, right.start),
+      max(left.end, right.end),
+    )
   }
 
   pub fn as_str(&self) -> &str {
@@ -94,8 +105,16 @@ impl Source {
   }
 
   // TODO: Replace with std::ops::Index implementation
-  pub fn get(&self, index: usize) -> Option<u8> {
-    self.inner.as_bytes().get(index).copied()
+  pub fn get(&self, start: usize) -> Option<u8> {
+    self.inner.as_bytes().get(start).copied()
+  }
+
+  pub fn line(&self, start: usize) -> usize {
+    0
+  }
+
+  pub fn column(&self, start: usize) -> usize {
+    0
   }
 
   pub fn len(&self) -> usize {
