@@ -28,7 +28,7 @@ impl Parser {
     self.lexer.source()
   }
 
-  pub fn parse(&mut self) -> Spanned<Expression> {
+  pub fn parse(mut self) -> Spanned<Expression> {
     self.expression().unwrap()
   }
 
@@ -45,7 +45,7 @@ impl Parser {
         _ => return Ok(left_operand),
       };
 
-      let right_operand = self.addition()?;
+      let right_operand = self.multiplication()?;
 
       let span = Span::combine(
         left_operand.span(),
@@ -180,7 +180,7 @@ mod tests {
 
   #[test]
   fn operations() {
-    let mut parser = Parser::new("1 + 2 * 3 - 4 / 5");
+    let parser = Parser::new("1 + 2 * 3 - 4 / 5");
     let source = parser.source().clone();
     let expression = parser.parse();
 
@@ -188,11 +188,11 @@ mod tests {
       expression,
       Spanned::new(
         Expression::binary(
-          Spanned::new(Token::Plus, Span::new(source.clone(), 2, 3)),
-          Spanned::new(Expression::int(1), Span::new(source.clone(), 0, 1)),
+          Spanned::new(Token::Hyphen, Span::new(source.clone(), 10, 11)),
           Spanned::new(
             Expression::binary(
-              Spanned::new(Token::Hyphen, Span::new(source.clone(), 10, 11)),
+              Spanned::new(Token::Plus, Span::new(source.clone(), 2, 3)),
+              Spanned::new(Expression::int(1), Span::new(source.clone(), 0, 1)),
               Spanned::new(
                 Expression::binary(
                   Spanned::new(
@@ -210,23 +210,23 @@ mod tests {
                 ),
                 Span::new(source.clone(), 4, 9)
               ),
+            ),
+            Span::new(source.clone(), 0, 9),
+          ),
+          Spanned::new(
+            Expression::binary(
+              Spanned::new(Token::Slash, Span::new(source.clone(), 14, 15)),
               Spanned::new(
-                Expression::binary(
-                  Spanned::new(Token::Slash, Span::new(source.clone(), 14, 15)),
-                  Spanned::new(
-                    Expression::int(4),
-                    Span::new(source.clone(), 12, 13)
-                  ),
-                  Spanned::new(
-                    Expression::int(5),
-                    Span::new(source.clone(), 16, 17)
-                  ),
-                ),
-                Span::new(source.clone(), 12, 17)
+                Expression::int(4),
+                Span::new(source.clone(), 12, 13)
+              ),
+              Spanned::new(
+                Expression::int(5),
+                Span::new(source.clone(), 16, 17)
               ),
             ),
-            Span::new(source.clone(), 4, 17),
-          ),
+            Span::new(source.clone(), 12, 17)
+          )
         ),
         Span::new(source.clone(), 0, 17)
       ),
