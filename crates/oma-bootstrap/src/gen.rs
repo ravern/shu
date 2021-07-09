@@ -45,15 +45,14 @@ impl Generator {
     self.expression(chunk, binary_expression.left_operand.unwrap());
     self.expression(chunk, binary_expression.right_operand.unwrap());
 
-    match binary_expression.operator.base() {
-      Token::Plus => {
-        chunk.add_instruction(Instruction::Add as u64);
-      }
-      Token::Hyphen => {
-        chunk.add_instruction(Instruction::Sub as u64);
-      }
+    let instruction = match binary_expression.operator.base() {
+      Token::Plus => Instruction::Add,
+      Token::Hyphen => Instruction::Subtract,
+      Token::Asterisk => Instruction::Multiply,
+      Token::Slash => Instruction::Divide,
       _ => unreachable!("invalid operator in binary expression"),
-    }
+    };
+    chunk.add_instruction(instruction as u64);
   }
 
   fn unary_expression(
@@ -63,9 +62,11 @@ impl Generator {
   ) {
     self.expression(chunk, unary_expression.operand.unwrap());
 
-    match unary_expression.operator.base() {
+    let instruction = match unary_expression.operator.base() {
+      Token::Hyphen => Instruction::Negate,
       _ => unreachable!("invalid operator in unary expression"),
-    }
+    };
+    chunk.add_instruction(instruction as u64);
   }
 
   fn literal_expression(
@@ -73,18 +74,13 @@ impl Generator {
     chunk: &mut Chunk,
     literal_expression: LiteralExpression,
   ) {
-    match literal_expression {
-      LiteralExpression::Int(int) => {
-        let constant = chunk.add_constant(Constant::Int(int));
-        chunk.add_instruction(Instruction::Constant as u64);
-        chunk.add_instruction(constant as u64);
-      }
-      LiteralExpression::Float(float) => {
-        let constant = chunk.add_constant(Constant::Float(float));
-        chunk.add_instruction(Instruction::Constant as u64);
-        chunk.add_instruction(constant as u64);
-      }
-    }
+    let constant = match literal_expression {
+      LiteralExpression::Int(int) => Constant::Int(int),
+      LiteralExpression::Float(float) => Constant::Float(float),
+    };
+    let constant = chunk.add_constant(constant);
+    chunk.add_instruction(Instruction::PushConstant as u64);
+    chunk.add_instruction(constant as u64);
   }
 }
 
@@ -108,17 +104,17 @@ mod tests {
     let mut chunk = Chunk::new();
 
     let constant = chunk.add_constant(Constant::Int(1));
-    chunk.add_instruction(Instruction::Constant as u64);
+    chunk.add_instruction(Instruction::PushConstant as u64);
     chunk.add_instruction(constant as u64);
 
     let constant = chunk.add_constant(Constant::Int(2));
-    chunk.add_instruction(Instruction::Constant as u64);
+    chunk.add_instruction(Instruction::PushConstant as u64);
     chunk.add_instruction(constant as u64);
 
     chunk.add_instruction(Instruction::Add as u64);
 
     let constant = chunk.add_constant(Constant::Int(3));
-    chunk.add_instruction(Instruction::Constant as u64);
+    chunk.add_instruction(Instruction::PushConstant as u64);
     chunk.add_instruction(constant as u64);
 
     chunk.add_instruction(Instruction::Add as u64);

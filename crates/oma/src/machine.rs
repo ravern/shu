@@ -1,3 +1,5 @@
+use std::ops::{Add, Div, Mul, Neg, Sub};
+
 use num_traits::FromPrimitive;
 
 use crate::{executable::Chunk, instruction::Instruction, value::Value};
@@ -24,6 +26,37 @@ impl Machine {
   }
 
   pub fn execute(&mut self, chunk: &Chunk) -> Result<Value, Error> {
+    macro_rules! binary {
+      ($op:ident) => {
+        let right = self.pop()?;
+        let left = self.pop()?;
+        let result = match (left, right) {
+          (Value::Int(left), Value::Int(right)) => Value::Int(left.$op(right)),
+          (Value::Float(left), Value::Int(right)) => {
+            Value::Float(left.$op(right as f64))
+          }
+          (Value::Int(left), Value::Float(right)) => {
+            Value::Float((left as f64).$op(right))
+          }
+          (Value::Float(left), Value::Float(right)) => {
+            Value::Float(left.$op(right))
+          }
+        };
+        self.push(result);
+      };
+    }
+
+    macro_rules! unary {
+      ($op:ident) => {
+        let operand = self.pop()?;
+        let result = match operand {
+          Value::Int(int) => Value::Int(int.$op()),
+          Value::Float(float) => Value::Float(float.$op()),
+        };
+        self.push(result);
+      };
+    }
+
     self.current = 0;
     self.stack = Vec::new();
 
@@ -36,7 +69,7 @@ impl Machine {
       self.current += 1;
 
       match instruction {
-        Instruction::Constant => {
+        Instruction::PushConstant => {
           let constant = chunk
             .instruction(self.current)
             .ok_or(Error::SegmentationFault(self.current))?;
@@ -47,38 +80,19 @@ impl Machine {
           self.push(constant.into());
         }
         Instruction::Add => {
-          let right = self.pop()?;
-          let left = self.pop()?;
-          let result = match (left, right) {
-            (Value::Int(left), Value::Int(right)) => Value::Int(left + right),
-            (Value::Float(left), Value::Int(right)) => {
-              Value::Float(left + right as f64)
-            }
-            (Value::Int(left), Value::Float(right)) => {
-              Value::Float(left as f64 + right)
-            }
-            (Value::Float(left), Value::Float(right)) => {
-              Value::Float(left + right)
-            }
-          };
-          self.push(result);
+          binary!(add);
         }
-        Instruction::Sub => {
-          let right = self.pop()?;
-          let left = self.pop()?;
-          let result = match (left, right) {
-            (Value::Int(left), Value::Int(right)) => Value::Int(left - right),
-            (Value::Float(left), Value::Int(right)) => {
-              Value::Float(left - right as f64)
-            }
-            (Value::Int(left), Value::Float(right)) => {
-              Value::Float(left as f64 - right)
-            }
-            (Value::Float(left), Value::Float(right)) => {
-              Value::Float(left - right)
-            }
-          };
-          self.push(result);
+        Instruction::Subtract => {
+          binary!(sub);
+        }
+        Instruction::Multiply => {
+          binary!(mul);
+        }
+        Instruction::Divide => {
+          binary!(div);
+        }
+        Instruction::Negate => {
+          unary!(neg);
         }
         Instruction::Return => {
           return self.pop();
@@ -113,17 +127,17 @@ mod tests {
     let mut chunk = Chunk::new();
 
     let constant = chunk.add_constant(Constant::Float(1.0));
-    chunk.add_instruction(Instruction::Constant as u64);
+    chunk.add_instruction(Instruction::PushConstant as u64);
     chunk.add_instruction(constant as u64);
 
     let constant = chunk.add_constant(Constant::Int(2));
-    chunk.add_instruction(Instruction::Constant as u64);
+    chunk.add_instruction(Instruction::PushConstant as u64);
     chunk.add_instruction(constant as u64);
 
     chunk.add_instruction(Instruction::Add as u64);
 
     let constant = chunk.add_constant(Constant::Int(3));
-    chunk.add_instruction(Instruction::Constant as u64);
+    chunk.add_instruction(Instruction::PushConstant as u64);
     chunk.add_instruction(constant as u64);
 
     chunk.add_instruction(Instruction::Add as u64);
