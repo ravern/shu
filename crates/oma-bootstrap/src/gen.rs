@@ -19,6 +19,7 @@ impl Generator {
   pub fn generate(mut self, expression: Spanned<Expression>) -> Chunk {
     let mut chunk = Chunk::new();
     self.expression(&mut chunk, expression.unwrap());
+    chunk.add_instruction(Instruction::Return as u64);
     chunk
   }
 
@@ -47,6 +48,9 @@ impl Generator {
     match binary_expression.operator.base() {
       Token::Plus => {
         chunk.add_instruction(Instruction::Add as u64);
+      }
+      Token::Hyphen => {
+        chunk.add_instruction(Instruction::Sub as u64);
       }
       _ => unreachable!("invalid operator in binary expression"),
     }
@@ -118,6 +122,8 @@ mod tests {
     chunk.add_instruction(constant as u64);
 
     chunk.add_instruction(Instruction::Add as u64);
+
+    chunk.add_instruction(Instruction::Return as u64);
 
     assert_eq!(generator.generate(dbg!(expression)), chunk);
   }

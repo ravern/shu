@@ -5,5 +5,6 @@ use num_derive::FromPrimitive;
 pub enum Instruction {
   Constant = 1u64,
   Add,
+  Sub,
   Return,
 }

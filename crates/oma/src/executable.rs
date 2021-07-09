@@ -31,6 +31,18 @@ impl Chunk {
     self.instructions.len() - 1
   }
 
+  pub fn instruction(&self, offset: usize) -> Option<u64> {
+    self.instructions.get(offset).copied()
+  }
+
+  pub fn constant(&self, offset: usize) -> Option<Constant> {
+    self.constants.get(offset).cloned()
+  }
+
+  pub fn len(&self) -> usize {
+    self.instructions.len()
+  }
+
   pub fn from_bytes<R>(r: &mut R) -> Result<Chunk, ParseError>
   where
     R: Read,
