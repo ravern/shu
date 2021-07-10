@@ -37,6 +37,10 @@ impl Expression {
   pub fn float(float: f64) -> Expression {
     Expression::Literal(LiteralExpression::Float(float))
   }
+
+  pub fn bool(bool: bool) -> Expression {
+    Expression::Literal(LiteralExpression::Bool(bool))
+  }
 }
 
 #[derive(Debug, PartialEq)]
@@ -56,4 +60,5 @@ pub struct BinaryExpression {
 pub enum LiteralExpression {
   Int(i64),
   Float(f64),
+  Bool(bool),
 }

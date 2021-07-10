@@ -2,7 +2,8 @@ use std::io::{self, Read};
 
 #[derive(Debug)]
 pub enum ParseError {
-  InvalidConstant(u64),
+  InvalidConstantType(u64),
+  InvalidConstantValue(u64),
   InvalidInstruction(u64),
   Io(io::Error),
 }
@@ -86,6 +87,7 @@ impl Chunk {
 pub enum Constant {
   Int(i64),
   Float(f64),
+  Bool(bool),
 }
 
 impl Constant {
@@ -104,8 +106,17 @@ impl Constant {
         r.read_exact(&mut bytes).map_err(ParseError::Io)?;
         Constant::Float(f64::from_le_bytes(bytes))
       }
+      3 => {
+        let mut bytes = [0u8; 1];
+        r.read_exact(&mut bytes).map_err(ParseError::Io)?;
+        match bytes[0] {
+          0 => Constant::Bool(false),
+          1 => Constant::Bool(true),
+          byte => return Err(ParseError::InvalidConstantValue(byte as u64)),
+        }
+      }
       constant => {
-        return Err(ParseError::InvalidConstant(constant));
+        return Err(ParseError::InvalidConstantType(constant));
       }
     };
 
@@ -123,6 +134,14 @@ impl Constant {
       Constant::Float(float) => {
         bytes.extend(2u64.to_le_bytes());
         bytes.extend(float.to_le_bytes());
+      }
+      Constant::Bool(bool) => {
+        bytes.extend(3u64.to_le_bytes());
+        if *bool {
+          bytes.push(1);
+        } else {
+          bytes.push(0);
+        }
       }
     }
 
@@ -163,6 +182,7 @@ mod tests {
     let mut chunk = Chunk::new();
     chunk.add_constant(Constant::Int(42));
     chunk.add_constant(Constant::Float(3.14159));
+    chunk.add_constant(Constant::Bool(false));
     chunk.add_instruction(Instruction::Add as u64);
     chunk.add_instruction(Instruction::Return as u64);
     let bytes = chunk.to_bytes();

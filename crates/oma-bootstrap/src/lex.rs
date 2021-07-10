@@ -53,9 +53,10 @@ impl Lexer {
     self.start = self.end;
 
     match self.peek() {
-      Some(b'+') => self.build_and_advance(Token::Plus),
-      Some(b'-') => self.build_and_advance(Token::Hyphen),
-      Some(b'*') => self.build_and_advance(Token::Asterisk),
+      Some(b'"') => self.string(),
+      Some(b'+') => self.advance_and_build(Token::Plus),
+      Some(b'-') => self.advance_and_build(Token::Dash),
+      Some(b'*') => self.advance_and_build(Token::Star),
       Some(b'/') => {
         self.advance();
         match self.peek() {
@@ -63,9 +64,62 @@ impl Lexer {
           _ => self.build(Token::Slash),
         }
       }
-      Some(b'\n') => self.build_and_advance(Token::Newline),
+      Some(b'>') => {
+        self.advance();
+        match self.peek() {
+          Some(b'=') => self.advance_and_build(Token::GreaterEqual),
+          _ => self.build(Token::Greater),
+        }
+      }
+      Some(b'<') => {
+        self.advance();
+        match self.peek() {
+          Some(b'=') => self.advance_and_build(Token::LessEqual),
+          _ => self.build(Token::Less),
+        }
+      }
+      Some(b'=') => {
+        self.advance();
+        match self.peek() {
+          Some(b'=') => self.advance_and_build(Token::EqualEqual),
+          _ => self.build(Token::Equal),
+        }
+      }
+      Some(b'!') => {
+        self.advance();
+        match self.peek() {
+          Some(b'=') => self.advance_and_build(Token::BangEqual),
+          _ => self.build(Token::Bang),
+        }
+      }
+      Some(b'&') => {
+        self.advance();
+        match self.peek() {
+          Some(b'&') => self.advance_and_build(Token::AmpAmp),
+          Some(byte) => self.build_err(LexError::UnexpectedChar(byte)),
+          None => self.build_err(LexError::UnexpectedEof),
+        }
+      }
+      Some(b'|') => {
+        self.advance();
+        match self.peek() {
+          Some(b'|') => self.advance_and_build(Token::PipePipe),
+          Some(byte) => self.build_err(LexError::UnexpectedChar(byte)),
+          None => self.build_err(LexError::UnexpectedEof),
+        }
+      }
+      Some(b',') => self.advance_and_build(Token::Star),
+      Some(b'.') => self.advance_and_build(Token::Star),
+      Some(b'(') => self.advance_and_build(Token::OpenParen),
+      Some(b')') => self.advance_and_build(Token::CloseParen),
+      Some(b'{') => self.advance_and_build(Token::OpenBrace),
+      Some(b'}') => self.advance_and_build(Token::CloseBrace),
+      Some(b'[') => self.advance_and_build(Token::OpenBracket),
+      Some(b']') => self.advance_and_build(Token::CloseBracket),
+      Some(b'\n') => self.advance_and_build(Token::Newline),
       Some(byte) if is_digit(byte) => self.number(),
-      Some(byte) => self.build_err_and_advance(LexError::UnexpectedChar(byte)),
+      Some(byte) if is_alphabetic(byte) => self.identifier(),
+      Some(byte) => self.advance_and_build_err(LexError::UnexpectedChar(byte)),
       None => self.build(Token::Eof),
     }
   }
@@ -81,6 +135,19 @@ impl Lexer {
       }
     }
     self.build(Token::Comment)
+  }
+
+  fn string(&mut self) -> Result<Spanned<Token>, Spanned<LexError>> {
+    self.advance();
+    loop {
+      match self.peek() {
+        Some(b'"') => break,
+        None => return self.advance_and_build_err(LexError::UnexpectedEof),
+        _ => self.advance(),
+      };
+    }
+    self.advance();
+    self.build(Token::String)
   }
 
   fn number(&mut self) -> Result<Spanned<Token>, Spanned<LexError>> {
@@ -107,6 +174,26 @@ impl Lexer {
     }
   }
 
+  fn identifier(&mut self) -> Result<Spanned<Token>, Spanned<LexError>> {
+    loop {
+      match self.peek() {
+        Some(byte) if !is_digit(byte) && !is_alphabetic(byte) => break,
+        None => break,
+        _ => self.advance(),
+      };
+    }
+
+    let token = self.build(Token::Identifier)?;
+    match token.span().as_str() {
+      "true" => Ok(token.map(|_| Token::True)),
+      "false" => Ok(token.map(|_| Token::False)),
+      "fn" => Ok(token.map(|_| Token::Fn)),
+      "mod" => Ok(token.map(|_| Token::Mod)),
+      "impl" => Ok(token.map(|_| Token::Impl)),
+      _ => Ok(token),
+    }
+  }
+
   fn whitespace(&mut self) {
     loop {
       match self.peek() {
@@ -125,7 +212,7 @@ impl Lexer {
     ))
   }
 
-  fn build_and_advance(
+  fn advance_and_build(
     &mut self,
     token: Token,
   ) -> Result<Spanned<Token>, Spanned<LexError>> {
@@ -143,7 +230,7 @@ impl Lexer {
     ))
   }
 
-  fn build_err_and_advance(
+  fn advance_and_build_err(
     &mut self,
     error: LexError,
   ) -> Result<Spanned<Token>, Spanned<LexError>> {
@@ -159,14 +246,6 @@ impl Lexer {
     self.end += 1;
     self.source.get(self.end - 1)
   }
-
-  fn expect(&mut self, expected: u8) -> Result<u8, LexError> {
-    match self.advance() {
-      Some(byte) if byte == expected => Ok(byte),
-      Some(byte) => Err(LexError::UnexpectedChar(byte)),
-      None => Err(LexError::UnexpectedEof),
-    }
-  }
 }
 
 fn is_digit(byte: u8) -> bool {
@@ -177,8 +256,14 @@ fn is_whitespace(byte: u8) -> bool {
   byte == b'\r' || byte == b' ' || byte == b'\t'
 }
 
+fn is_alphabetic(byte: u8) -> bool {
+  byte >= b'a' && byte <= b'z' || byte >= b'A' && byte <= b'Z'
+}
+
 #[cfg(test)]
 mod tests {
+  use pretty_assertions::assert_eq;
+
   use crate::{
     span::{Span, Spanned},
     token::Token,
@@ -258,7 +343,7 @@ mod tests {
 
   #[test]
   fn punctuation() {
-    let lexer = Lexer::new("+ - * /");
+    let lexer = Lexer::new("+ - * / > >= < <= = == ! != && ||");
     let source = lexer.source().clone();
     let tokens = lexer.collect();
 
@@ -266,13 +351,96 @@ mod tests {
       tokens,
       vec![
         Ok(Spanned::new(Token::Plus, Span::new(source.clone(), 0, 1))),
-        Ok(Spanned::new(Token::Hyphen, Span::new(source.clone(), 2, 3))),
-        Ok(Spanned::new(
-          Token::Asterisk,
-          Span::new(source.clone(), 4, 5)
-        )),
+        Ok(Spanned::new(Token::Dash, Span::new(source.clone(), 2, 3))),
+        Ok(Spanned::new(Token::Star, Span::new(source.clone(), 4, 5))),
         Ok(Spanned::new(Token::Slash, Span::new(source.clone(), 6, 7))),
-        Ok(Spanned::new(Token::Eof, Span::new(source.clone(), 7, 7))),
+        Ok(Spanned::new(
+          Token::Greater,
+          Span::new(source.clone(), 8, 9)
+        )),
+        Ok(Spanned::new(
+          Token::GreaterEqual,
+          Span::new(source.clone(), 10, 12)
+        )),
+        Ok(Spanned::new(Token::Less, Span::new(source.clone(), 13, 14))),
+        Ok(Spanned::new(
+          Token::LessEqual,
+          Span::new(source.clone(), 15, 17)
+        )),
+        Ok(Spanned::new(
+          Token::Equal,
+          Span::new(source.clone(), 18, 19)
+        )),
+        Ok(Spanned::new(
+          Token::EqualEqual,
+          Span::new(source.clone(), 20, 22)
+        )),
+        Ok(Spanned::new(Token::Bang, Span::new(source.clone(), 23, 24))),
+        Ok(Spanned::new(
+          Token::BangEqual,
+          Span::new(source.clone(), 25, 27)
+        )),
+        Ok(Spanned::new(
+          Token::AmpAmp,
+          Span::new(source.clone(), 28, 30)
+        )),
+        Ok(Spanned::new(
+          Token::PipePipe,
+          Span::new(source.clone(), 31, 33)
+        )),
+        Ok(Spanned::new(Token::Eof, Span::new(source.clone(), 33, 33))),
+      ]
+    );
+  }
+
+  #[test]
+  fn string() {
+    let lexer = Lexer::new("\"foo\"");
+    let source = lexer.source().clone();
+    let tokens = lexer.collect();
+
+    assert_eq!(
+      tokens,
+      vec![
+        Ok(Spanned::new(Token::String, Span::new(source.clone(), 0, 5))),
+        Ok(Spanned::new(Token::Eof, Span::new(source.clone(), 5, 5))),
+      ]
+    );
+  }
+
+  #[test]
+  fn keywords() {
+    let lexer = Lexer::new("true false fn mod impl");
+    let source = lexer.source().clone();
+    let tokens = lexer.collect();
+
+    assert_eq!(
+      tokens,
+      vec![
+        Ok(Spanned::new(Token::True, Span::new(source.clone(), 0, 4))),
+        Ok(Spanned::new(Token::False, Span::new(source.clone(), 5, 10))),
+        Ok(Spanned::new(Token::Fn, Span::new(source.clone(), 11, 13))),
+        Ok(Spanned::new(Token::Mod, Span::new(source.clone(), 14, 17))),
+        Ok(Spanned::new(Token::Impl, Span::new(source.clone(), 18, 22))),
+        Ok(Spanned::new(Token::Eof, Span::new(source.clone(), 22, 22))),
+      ]
+    );
+  }
+
+  #[test]
+  fn identifier() {
+    let lexer = Lexer::new("foo");
+    let source = lexer.source().clone();
+    let tokens = lexer.collect();
+
+    assert_eq!(
+      tokens,
+      vec![
+        Ok(Spanned::new(
+          Token::Identifier,
+          Span::new(source.clone(), 0, 3)
+        )),
+        Ok(Spanned::new(Token::Eof, Span::new(source.clone(), 3, 3))),
       ]
     );
   }

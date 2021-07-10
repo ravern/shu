@@ -4,6 +4,7 @@ use crate::executable::Constant;
 pub enum Value {
   Int(i64),
   Float(f64),
+  Bool(bool),
 }
 
 impl From<Constant> for Value {
@@ -11,6 +12,7 @@ impl From<Constant> for Value {
     match constant {
       Constant::Int(int) => Value::Int(int),
       Constant::Float(float) => Value::Float(float),
+      Constant::Bool(bool) => Value::Bool(bool),
     }
   }
 }

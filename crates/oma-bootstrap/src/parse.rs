@@ -16,6 +16,30 @@ pub struct Parser {
   current: Option<Spanned<Token>>,
 }
 
+macro_rules! binary {
+  ($self:ident, $parse:ident, $($tokens:pat)|+ $(,)?) => {
+    let mut left_operand = $self.$parse()?;
+
+    loop {
+      let operator = match $self.peek()?.base() {
+        $($tokens)|+ => $self.advance()?,
+        _ => return Ok(left_operand),
+      };
+
+      let right_operand = $self.$parse()?;
+
+      let span = Span::combine(
+        left_operand.span(),
+        &Span::combine(operator.span(), right_operand.span()),
+      );
+      left_operand = Spanned::new(
+        Expression::binary(operator, left_operand, right_operand),
+        span,
+      );
+    }
+  };
+}
+
 impl Parser {
   pub fn new(source: &str) -> Parser {
     Parser {
@@ -29,66 +53,128 @@ impl Parser {
   }
 
   pub fn parse(mut self) -> Spanned<Expression> {
-    self.expression().unwrap()
+    let expression = self.expression().unwrap();
+    self.expect(Token::Eof).unwrap();
+    expression
   }
 
   fn expression(&mut self) -> Result<Spanned<Expression>, Spanned<ParseError>> {
-    self.addition()
+    self.logical()
+  }
+
+  fn logical(&mut self) -> Result<Spanned<Expression>, Spanned<ParseError>> {
+    binary! {
+      self,
+      equality,
+      Token::AmpAmp | Token::PipePipe,
+    }
+  }
+
+  fn equality(&mut self) -> Result<Spanned<Expression>, Spanned<ParseError>> {
+    let left_operand = self.comparison()?;
+
+    let operator = match self.peek()?.base() {
+      Token::EqualEqual | Token::BangEqual => self.advance()?,
+      _ => return Ok(left_operand),
+    };
+
+    let right_operand = self.comparison()?;
+
+    let span = Span::combine(
+      left_operand.span(),
+      &Span::combine(operator.span(), right_operand.span()),
+    );
+    let expression = Spanned::new(
+      Expression::binary(operator, left_operand, right_operand),
+      span,
+    );
+
+    let token = self.peek()?;
+    match token.base() {
+      Token::EqualEqual | Token::BangEqual => {
+        let span = token.span().clone();
+        return Err(Spanned::new(
+          ParseError::UnexpectedToken(token.unwrap()),
+          span,
+        ));
+      }
+      _ => {}
+    }
+
+    Ok(expression)
+  }
+
+  fn comparison(&mut self) -> Result<Spanned<Expression>, Spanned<ParseError>> {
+    let left_operand = self.addition()?;
+
+    let operator = match self.peek()?.base() {
+      Token::Greater | Token::GreaterEqual | Token::Less | Token::LessEqual => {
+        self.advance()?
+      }
+      _ => return Ok(left_operand),
+    };
+
+    let right_operand = self.addition()?;
+
+    let span = Span::combine(
+      left_operand.span(),
+      &Span::combine(operator.span(), right_operand.span()),
+    );
+    let expression = Spanned::new(
+      Expression::binary(operator, left_operand, right_operand),
+      span,
+    );
+
+    let token = self.peek()?;
+    match token.base() {
+      Token::Greater | Token::GreaterEqual | Token::Less | Token::LessEqual => {
+        let span = token.span().clone();
+        return Err(Spanned::new(
+          ParseError::UnexpectedToken(token.unwrap()),
+          span,
+        ));
+      }
+      _ => {}
+    }
+
+    Ok(expression)
   }
 
   fn addition(&mut self) -> Result<Spanned<Expression>, Spanned<ParseError>> {
-    let mut left_operand = self.multiplication()?;
-
-    loop {
-      let operator = match self.peek()?.base() {
-        Token::Plus | Token::Hyphen => self.advance()?,
-        _ => return Ok(left_operand),
-      };
-
-      let right_operand = self.multiplication()?;
-
-      let span = Span::combine(
-        left_operand.span(),
-        &Span::combine(operator.span(), right_operand.span()),
-      );
-      left_operand = Spanned::new(
-        Expression::binary(operator, left_operand, right_operand),
-        span,
-      );
+    binary! {
+      self,
+      multiplication,
+      Token::Plus | Token::Dash,
     }
   }
 
   fn multiplication(
     &mut self,
   ) -> Result<Spanned<Expression>, Spanned<ParseError>> {
-    let mut left_operand = self.unary()?;
-
-    loop {
-      let operator = match self.peek()?.base() {
-        Token::Asterisk | Token::Slash => self.advance()?,
-        _ => return Ok(left_operand),
-      };
-
-      let right_operand = self.unary()?;
-
-      let span = Span::combine(
-        left_operand.span(),
-        &Span::combine(operator.span(), right_operand.span()),
-      );
-      left_operand = Spanned::new(
-        Expression::binary(operator, left_operand, right_operand),
-        span,
-      );
+    binary! {
+      self,
+      unary,
+      Token::Star | Token::Slash,
     }
   }
 
   fn unary(&mut self) -> Result<Spanned<Expression>, Spanned<ParseError>> {
     match self.peek()?.base() {
-      Token::Hyphen => {
+      Token::Dash | Token::Bang => {
         let operator = self.advance()?;
         let operand = self.unary()?;
         let span = Span::combine(operator.span(), operand.span());
         Ok(Spanned::new(Expression::unary(operator, operand), span))
+      }
+      Token::OpenParen => {
+        let open_paren = self.advance()?;
+        let expression = self.expression()?;
+        let close_paren = self.expect(Token::CloseParen)?;
+        let span = Span::combine(
+          open_paren.span(),
+          &Span::combine(expression.span(), close_paren.span()),
+        );
+        Ok(Spanned::new(expression.unwrap(), span))
       }
       _ => self.literal(),
     }
@@ -110,6 +196,18 @@ impl Parser {
           Expression::float(float.span().as_str().parse().unwrap()),
           float.span().clone(),
         );
+        Ok(expression)
+      }
+      Token::True => {
+        let bool = self.advance()?;
+        let expression =
+          Spanned::new(Expression::bool(true), bool.span().clone());
+        Ok(expression)
+      }
+      Token::False => {
+        let bool = self.advance()?;
+        let expression =
+          Spanned::new(Expression::bool(false), bool.span().clone());
         Ok(expression)
       }
       _ => {
@@ -188,17 +286,14 @@ mod tests {
       expression,
       Spanned::new(
         Expression::binary(
-          Spanned::new(Token::Hyphen, Span::new(source.clone(), 10, 11)),
+          Spanned::new(Token::Dash, Span::new(source.clone(), 10, 11)),
           Spanned::new(
             Expression::binary(
               Spanned::new(Token::Plus, Span::new(source.clone(), 2, 3)),
               Spanned::new(Expression::int(1), Span::new(source.clone(), 0, 1)),
               Spanned::new(
                 Expression::binary(
-                  Spanned::new(
-                    Token::Asterisk,
-                    Span::new(source.clone(), 6, 7)
-                  ),
+                  Spanned::new(Token::Star, Span::new(source.clone(), 6, 7)),
                   Spanned::new(
                     Expression::int(2),
                     Span::new(source.clone(), 4, 5)

@@ -47,9 +47,17 @@ impl Generator {
 
     let instruction = match binary_expression.operator.base() {
       Token::Plus => Instruction::Add,
-      Token::Hyphen => Instruction::Subtract,
-      Token::Asterisk => Instruction::Multiply,
+      Token::Dash => Instruction::Subtract,
+      Token::Star => Instruction::Multiply,
       Token::Slash => Instruction::Divide,
+      Token::Greater => Instruction::Greater,
+      Token::GreaterEqual => Instruction::GreaterEqual,
+      Token::Less => Instruction::Less,
+      Token::LessEqual => Instruction::LessEqual,
+      Token::EqualEqual => Instruction::Equal,
+      Token::BangEqual => Instruction::NotEqual,
+      Token::AmpAmp => Instruction::And,
+      Token::PipePipe => Instruction::Or,
       _ => unreachable!("invalid operator in binary expression"),
     };
     chunk.add_instruction(instruction as u64);
@@ -63,7 +71,8 @@ impl Generator {
     self.expression(chunk, unary_expression.operand.unwrap());
 
     let instruction = match unary_expression.operator.base() {
-      Token::Hyphen => Instruction::Negate,
+      Token::Dash => Instruction::Negate,
+      Token::Bang => Instruction::Not,
       _ => unreachable!("invalid operator in unary expression"),
     };
     chunk.add_instruction(instruction as u64);
@@ -77,6 +86,7 @@ impl Generator {
     let constant = match literal_expression {
       LiteralExpression::Int(int) => Constant::Int(int),
       LiteralExpression::Float(float) => Constant::Float(float),
+      LiteralExpression::Bool(bool) => Constant::Bool(bool),
     };
     let constant = chunk.add_constant(constant);
     chunk.add_instruction(Instruction::PushConstant as u64);
