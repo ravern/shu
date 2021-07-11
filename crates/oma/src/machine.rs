@@ -126,6 +126,9 @@ impl Machine {
             .ok_or(Error::InvalidLocal(index))?;
           self.push(local);
         }
+        Instruction::PushUnit => {
+          self.push(Value::Unit);
+        }
         Instruction::Pop => {
           self.pop()?;
         }

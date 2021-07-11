@@ -5,8 +5,8 @@ use oma::{
 
 use crate::{
   ast::{
-    BinaryExpression, BindStatement, Block, Expression, LiteralExpression,
-    Statement, UnaryExpression,
+    BinaryExpression, BindStatement, Block, Expression, ExpressionStatement,
+    LiteralExpression, Statement, UnaryExpression,
   },
   span::Spanned,
   token::Token,
@@ -27,8 +27,22 @@ impl Generator {
   }
 
   fn block(&mut self, chunk: &mut Chunk, block: Block) {
+    let requires_unit_return = block
+      .statements
+      .last()
+      .map(|statement| {
+        if let Statement::Expression(expression_statement) = statement.base() {
+          expression_statement.semicolon_token.is_some()
+        } else {
+          true
+        }
+      })
+      .unwrap_or(true);
     for statement in block.statements {
       self.statement(chunk, statement.unwrap())
+    }
+    if requires_unit_return {
+      chunk.emit(Instruction::PushUnit);
     }
   }
 
@@ -38,10 +52,7 @@ impl Generator {
         self.bind_statement(chunk, bind_statement);
       }
       Statement::Expression(expression_statement) => {
-        self.expression(chunk, expression_statement.expression.unwrap());
-        if expression_statement.semicolon_token.is_some() {
-          chunk.emit(Instruction::Pop);
-        }
+        self.expression_statement(chunk, expression_statement);
       }
     }
   }
@@ -58,6 +69,17 @@ impl Generator {
       chunk.add_local(identifier);
     } else {
       panic!("cannot assign to non-identifier");
+    }
+  }
+
+  fn expression_statement(
+    &mut self,
+    chunk: &mut Chunk,
+    expression_statement: ExpressionStatement,
+  ) {
+    self.expression(chunk, expression_statement.expression.unwrap());
+    if expression_statement.semicolon_token.is_some() {
+      chunk.emit(Instruction::Pop);
     }
   }
 

@@ -7,6 +7,7 @@ use num_derive::FromPrimitive;
 pub enum Instruction {
   PushConstant = 0,
   PushLocal,
+  PushUnit,
   Pop,
   Add,
   Subtract,
@@ -30,6 +31,7 @@ impl fmt::Display for Instruction {
     match self {
       Instruction::PushConstant => write!(f, "PushConstant"),
       Instruction::PushLocal => write!(f, "PushLocal"),
+      Instruction::PushUnit => write!(f, "PushUnit"),
       Instruction::Pop => write!(f, "Pop"),
       Instruction::Add => write!(f, "Add"),
       Instruction::Subtract => write!(f, "Subtract"),

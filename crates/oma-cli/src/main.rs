@@ -15,6 +15,10 @@ fn main() {
     let chunk = generator.generate(block);
 
     println!("{}", chunk);
-    println!("{:?}", machine.execute(&chunk));
+
+    match machine.execute(&chunk) {
+      Ok(value) => println!("{}", value),
+      Err(error) => println!("{:?}", error),
+    }
   }
 }

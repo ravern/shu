@@ -135,7 +135,7 @@ impl fmt::Display for Chunk {
 
       match instruction {
         Instruction::PushConstant => {
-          if offset + 8 < self.code.len() {
+          if offset + 8 <= self.code.len() {
             let index_bytes = [
               self.code[offset],
               self.code[offset + 1],
@@ -158,7 +158,7 @@ impl fmt::Display for Chunk {
           }
         }
         Instruction::PushLocal => {
-          if offset + 8 < self.code.len() {
+          if offset + 8 <= self.code.len() {
             let index_bytes = [
               self.code[offset],
               self.code[offset + 1],
@@ -177,7 +177,9 @@ impl fmt::Display for Chunk {
         _ => {}
       }
 
-      writeln!(f, "")?;
+      if offset < self.code.len() {
+        writeln!(f, "")?;
+      }
     }
 
     Ok(())
