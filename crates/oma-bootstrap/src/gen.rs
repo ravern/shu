@@ -4,7 +4,10 @@ use oma::{
 };
 
 use crate::{
-  ast::{BinaryExpression, Expression, LiteralExpression, UnaryExpression},
+  ast::{
+    BinaryExpression, BindStatement, Block, Expression, LiteralExpression,
+    Statement, UnaryExpression,
+  },
   span::Spanned,
   token::Token,
 };
@@ -16,11 +19,46 @@ impl Generator {
     Generator {}
   }
 
-  pub fn generate(mut self, expression: Spanned<Expression>) -> Chunk {
+  pub fn generate(mut self, block: Spanned<Block>) -> Chunk {
     let mut chunk = Chunk::new();
-    self.expression(&mut chunk, expression.unwrap());
+    self.block(&mut chunk, block.unwrap());
     chunk.emit(Instruction::Return);
     chunk
+  }
+
+  fn block(&mut self, chunk: &mut Chunk, block: Block) {
+    for statement in block.statements {
+      self.statement(chunk, statement.unwrap())
+    }
+  }
+
+  fn statement(&mut self, chunk: &mut Chunk, statement: Statement) {
+    match statement {
+      Statement::Bind(bind_statement) => {
+        self.bind_statement(chunk, bind_statement);
+      }
+      Statement::Expression(expression_statement) => {
+        self.expression(chunk, expression_statement.expression.unwrap());
+        if expression_statement.semicolon_token.is_some() {
+          chunk.emit(Instruction::Pop);
+        }
+      }
+    }
+  }
+
+  fn bind_statement(
+    &mut self,
+    chunk: &mut Chunk,
+    bind_statement: BindStatement,
+  ) {
+    self.expression(chunk, bind_statement.expression.unwrap());
+    if let Expression::Literal(LiteralExpression::Identifier(identifier)) =
+      bind_statement.pattern.unwrap()
+    {
+      chunk.add_local(identifier);
+    } else {
+      panic!("cannot assign to non-identifier");
+    }
   }
 
   fn expression(&mut self, chunk: &mut Chunk, expression: Expression) {
@@ -87,8 +125,17 @@ impl Generator {
       LiteralExpression::Int(int) => Constant::Int(int),
       LiteralExpression::Float(float) => Constant::Float(float),
       LiteralExpression::Bool(bool) => Constant::Bool(bool),
+      LiteralExpression::Identifier(identifier) => {
+        let index = chunk
+          .local(&identifier)
+          .expect(&format!("local '{}' not defined", identifier))
+          as u64;
+        chunk.emit(Instruction::PushLocal);
+        chunk.emit_bytes(index.to_le_bytes());
+        return;
+      }
     };
-    let constant = chunk.add_constant(constant);
+    let constant = chunk.add_constant(constant) as u64;
     chunk.emit(Instruction::PushConstant);
     chunk.emit_bytes(constant.to_le_bytes());
   }
@@ -107,8 +154,8 @@ mod tests {
 
   #[test]
   fn addition() {
-    let parser = Parser::new("1 + 2 + 3");
-    let expression = parser.parse();
+    let parser = Parser::new("{ 1 + 2 + 3; }");
+    let block = parser.parse();
     let generator = Generator::new();
 
     let mut chunk = Chunk::new();
@@ -131,6 +178,6 @@ mod tests {
 
     chunk.emit(Instruction::Return);
 
-    assert_eq!(generator.generate(expression), chunk);
+    assert_eq!(generator.generate(block), chunk);
   }
 }

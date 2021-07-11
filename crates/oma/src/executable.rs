@@ -1,4 +1,5 @@
 use std::{
+  collections::HashMap,
   fmt,
   io::{self, Read},
 };
@@ -22,6 +23,7 @@ pub struct Executable {
 
 #[derive(Debug, PartialEq)]
 pub struct Chunk {
+  locals: HashMap<String, usize>,
   constants: Vec<Constant>,
   code: Vec<u8>,
 }
@@ -29,6 +31,7 @@ pub struct Chunk {
 impl Chunk {
   pub fn new() -> Chunk {
     Chunk {
+      locals: HashMap::new(),
       constants: Vec::new(),
       code: Vec::new(),
     }
@@ -37,6 +40,12 @@ impl Chunk {
   pub fn add_constant(&mut self, constant: Constant) -> usize {
     self.constants.push(constant);
     self.constants.len() - 1
+  }
+
+  pub fn add_local(&mut self, identifier: String) -> usize {
+    let index = self.locals.len();
+    self.locals.insert(identifier, index);
+    index
   }
 
   pub fn emit(&mut self, instruction: Instruction) -> usize {
@@ -54,6 +63,10 @@ impl Chunk {
       self.code.push(byte);
     }
     self.code.len() - N
+  }
+
+  pub fn local(&self, identifier: &str) -> Option<usize> {
+    self.locals.get(identifier).copied()
   }
 
   pub fn constant(&self, index: usize) -> Option<Constant> {
@@ -142,6 +155,23 @@ impl fmt::Display for Chunk {
             } else {
               write!(f, " Invalid")?;
             }
+          }
+        }
+        Instruction::PushLocal => {
+          if offset + 8 < self.code.len() {
+            let index_bytes = [
+              self.code[offset],
+              self.code[offset + 1],
+              self.code[offset + 2],
+              self.code[offset + 3],
+              self.code[offset + 4],
+              self.code[offset + 5],
+              self.code[offset + 6],
+              self.code[offset + 7],
+            ];
+            let index = u64::from_le_bytes(index_bytes);
+            write!(f, " {:#010x}", index)?;
+            offset += 8;
           }
         }
         _ => {}

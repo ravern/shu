@@ -1,6 +1,6 @@
 use crate::executable::Constant;
 
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum Value {
   Int(i64),
   Float(f64),

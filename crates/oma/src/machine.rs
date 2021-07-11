@@ -12,6 +12,7 @@ pub enum Error {
   SegmentationFault(usize),
   InvalidInstruction(u8),
   InvalidConstant(u64),
+  InvalidLocal(u64),
   InvalidType,
   EmptyStack,
 }
@@ -115,6 +116,18 @@ impl Machine {
             .constant(index as usize)
             .ok_or(Error::InvalidConstant(index))?;
           self.push(constant.into());
+        }
+        Instruction::PushLocal => {
+          let index = self.advance_u64(chunk)?;
+          let local = self
+            .stack
+            .get(index as usize)
+            .cloned()
+            .ok_or(Error::InvalidLocal(index))?;
+          self.push(local);
+        }
+        Instruction::Pop => {
+          self.pop()?;
         }
         Instruction::Add => {
           arithmetic!(add);

@@ -9,10 +9,10 @@ fn main() {
     let line = editor.readline("> ").unwrap();
 
     let parser = Parser::new(&line);
-    let expression = parser.parse();
+    let block = parser.parse();
 
     let generator = Generator::new();
-    let chunk = generator.generate(expression);
+    let chunk = generator.generate(block);
 
     println!("{}", chunk);
     println!("{:?}", machine.execute(&chunk));
