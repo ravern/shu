@@ -198,6 +198,10 @@ mod tests {
 
     chunk.emit(Instruction::Add);
 
+    chunk.emit(Instruction::Pop);
+
+    chunk.emit(Instruction::PushUnit);
+
     chunk.emit(Instruction::Return);
 
     assert_eq!(generator.generate(block), chunk);

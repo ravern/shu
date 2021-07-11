@@ -381,7 +381,7 @@ mod tests {
 
   #[test]
   fn operations() {
-    let parser = Parser::new("1 + 2 * 3 - 4 / 5;");
+    let mut parser = Parser::new("1 + 2 * 3 - 4 / 5;");
     let source = parser.source().clone();
     let statement = parser.statement().unwrap();
 
