@@ -172,6 +172,14 @@ impl fmt::Display for Chunk {
             let index = u64::from_le_bytes(index_bytes);
             write!(f, " {:#010x}", index)?;
             offset += 8;
+
+            if let Some(identifier) =
+              find_key_for_value(&self.locals, index as usize)
+            {
+              write!(f, " {}", identifier)?;
+            } else {
+              write!(f, " Invalid")?;
+            }
           }
         }
         _ => {}
@@ -278,6 +286,16 @@ where
   let mut bytes = [0u8; 8];
   r.read_exact(&mut bytes).map_err(ParseError::Io)?;
   Ok(u64::from_le_bytes(bytes))
+}
+
+fn find_key_for_value(
+  hash_map: &HashMap<String, usize>,
+  value: usize,
+) -> Option<&str> {
+  hash_map
+    .iter()
+    .find_map(|(key, &val)| if val == value { Some(key) } else { None })
+    .map(|identifier| identifier.as_str())
 }
 
 #[cfg(test)]
