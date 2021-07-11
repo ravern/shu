@@ -1,4 +1,9 @@
-use std::io::{self, Read};
+use std::{
+  fmt,
+  io::{self, Read},
+};
+
+use num_traits::FromPrimitive;
 
 use crate::instruction::Instruction;
 
@@ -96,6 +101,59 @@ impl Chunk {
   }
 }
 
+impl fmt::Display for Chunk {
+  fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    let mut offset = 0;
+
+    while offset < self.code.len() {
+      write!(f, "{:#010x}", offset)?;
+
+      offset += 1;
+      let instruction = match Instruction::from_u8(self.code[offset - 1]) {
+        Some(instruction) => {
+          write!(f, " {:16}", format!("{}", instruction))?;
+          instruction
+        }
+        None => {
+          write!(f, " {:16}", "Invalid")?;
+          continue;
+        }
+      };
+
+      match instruction {
+        Instruction::PushConstant => {
+          if offset + 8 < self.code.len() {
+            let index_bytes = [
+              self.code[offset],
+              self.code[offset + 1],
+              self.code[offset + 2],
+              self.code[offset + 3],
+              self.code[offset + 4],
+              self.code[offset + 5],
+              self.code[offset + 6],
+              self.code[offset + 7],
+            ];
+            let index = u64::from_le_bytes(index_bytes);
+            write!(f, " {:#010x}", index)?;
+            offset += 8;
+
+            if let Some(constant) = self.constants.get(index as usize) {
+              write!(f, " {}", constant)?;
+            } else {
+              write!(f, " Invalid")?;
+            }
+          }
+        }
+        _ => {}
+      }
+
+      writeln!(f, "")?;
+    }
+
+    Ok(())
+  }
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub enum Constant {
   Int(i64),
@@ -159,6 +217,16 @@ impl Constant {
     }
 
     bytes
+  }
+}
+
+impl fmt::Display for Constant {
+  fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    match self {
+      Constant::Int(int) => write!(f, "{}", int),
+      Constant::Float(float) => write!(f, "{}", float),
+      Constant::Bool(bool) => write!(f, "{}", bool),
+    }
   }
 }
 

@@ -14,6 +14,7 @@ fn main() {
     let generator = Generator::new();
     let chunk = generator.generate(expression);
 
+    println!("{}", chunk);
     println!("{:?}", machine.execute(&chunk));
   }
 }
