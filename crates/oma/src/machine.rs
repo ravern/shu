@@ -1,6 +1,6 @@
 use std::{
   cmp::{PartialEq, PartialOrd},
-  ops::{Add, Div, Mul, Neg, Sub},
+  ops::{Add, Div, Mul, Sub},
 };
 
 use num_traits::FromPrimitive;
@@ -104,27 +104,13 @@ impl Machine {
     self.stack = Vec::new();
 
     loop {
-      let instruction = *chunk
-        .code()
-        .get(self.current)
-        .ok_or(Error::SegmentationFault(self.current))?;
-      let instruction = Instruction::from_u8(instruction)
-        .ok_or(Error::InvalidInstruction(instruction))?;
-      self.current += 1;
+      let byte = self.advance(chunk)?;
+      let instruction =
+        Instruction::from_u8(byte).ok_or(Error::InvalidInstruction(byte))?;
 
       match instruction {
         Instruction::PushConstant => {
-          let index_bytes = [
-            self.advance(chunk)?,
-            self.advance(chunk)?,
-            self.advance(chunk)?,
-            self.advance(chunk)?,
-            self.advance(chunk)?,
-            self.advance(chunk)?,
-            self.advance(chunk)?,
-            self.advance(chunk)?,
-          ];
-          let index = u64::from_le_bytes(index_bytes);
+          let index = self.advance_u64(chunk)?;
           let constant = chunk
             .constant(index as usize)
             .ok_or(Error::InvalidConstant(index))?;
@@ -204,6 +190,20 @@ impl Machine {
         }
       };
     }
+  }
+
+  fn advance_u64(&mut self, chunk: &Chunk) -> Result<u64, Error> {
+    let bytes = [
+      self.advance(chunk)?,
+      self.advance(chunk)?,
+      self.advance(chunk)?,
+      self.advance(chunk)?,
+      self.advance(chunk)?,
+      self.advance(chunk)?,
+      self.advance(chunk)?,
+      self.advance(chunk)?,
+    ];
+    Ok(u64::from_le_bytes(bytes))
   }
 
   fn advance(&mut self, chunk: &Chunk) -> Result<u8, Error> {

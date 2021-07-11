@@ -184,6 +184,7 @@ impl Parser {
     match self.peek()?.base() {
       Token::Int => {
         let int = self.advance()?;
+        // TODO: Check for integer overflow and parse as float instead.
         let expression = Spanned::new(
           Expression::int(int.span().as_str().parse().unwrap()),
           int.span().clone(),

@@ -105,16 +105,8 @@ impl Source {
   }
 
   // TODO: Replace with std::ops::Index implementation
-  pub fn get(&self, start: usize) -> Option<u8> {
-    self.inner.as_bytes().get(start).copied()
-  }
-
-  pub fn line(&self, start: usize) -> usize {
-    0
-  }
-
-  pub fn column(&self, start: usize) -> usize {
-    0
+  pub fn get(&self, index: usize) -> Option<u8> {
+    self.inner.as_bytes().get(index).copied()
   }
 
   pub fn len(&self) -> usize {
