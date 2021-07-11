@@ -1,5 +1,7 @@
 use std::io::{self, Read};
 
+use crate::instruction::Instruction;
+
 #[derive(Debug)]
 pub enum ParseError {
   InvalidConstantType(u64),
@@ -9,16 +11,21 @@ pub enum ParseError {
 }
 
 #[derive(Debug, PartialEq)]
+pub struct Executable {
+  chunks: Vec<Chunk>,
+}
+
+#[derive(Debug, PartialEq)]
 pub struct Chunk {
   constants: Vec<Constant>,
-  instructions: Vec<u64>,
+  code: Vec<u8>,
 }
 
 impl Chunk {
   pub fn new() -> Chunk {
     Chunk {
       constants: Vec::new(),
-      instructions: Vec::new(),
+      code: Vec::new(),
     }
   }
 
@@ -27,21 +34,29 @@ impl Chunk {
     self.constants.len() - 1
   }
 
-  pub fn add_instruction(&mut self, instruction: u64) -> usize {
-    self.instructions.push(instruction);
-    self.instructions.len() - 1
+  pub fn emit(&mut self, instruction: Instruction) -> usize {
+    self.code.push(instruction as u8);
+    self.code.len() - 1
   }
 
-  pub fn instruction(&self, offset: usize) -> Option<u64> {
-    self.instructions.get(offset).copied()
+  pub fn emit_byte(&mut self, byte: u8) -> usize {
+    self.code.push(byte);
+    self.code.len() - 1
   }
 
-  pub fn constant(&self, offset: usize) -> Option<Constant> {
-    self.constants.get(offset).cloned()
+  pub fn emit_bytes<const N: usize>(&mut self, bytes: [u8; N]) -> usize {
+    for byte in bytes {
+      self.code.push(byte);
+    }
+    self.code.len() - N
   }
 
-  pub fn len(&self) -> usize {
-    self.instructions.len()
+  pub fn constant(&self, index: usize) -> Option<Constant> {
+    self.constants.get(index).cloned()
+  }
+
+  pub fn code(&self) -> &[u8] {
+    &self.code
   }
 
   pub fn from_bytes<R>(r: &mut R) -> Result<Chunk, ParseError>
@@ -55,10 +70,10 @@ impl Chunk {
       chunk.constants.push(Constant::from_bytes(r)?);
     }
 
-    let instructions_len = read_u64(r)?;
-    for _ in 0..instructions_len {
-      let instruction = read_u64(r)?;
-      chunk.instructions.push(instruction);
+    let code_len = read_u64(r)?;
+    for _ in 0..code_len {
+      let byte = read_u8(r)?;
+      chunk.code.push(byte);
     }
 
     Ok(chunk)
@@ -73,11 +88,9 @@ impl Chunk {
       bytes.extend(constant.to_bytes());
     }
 
-    let instructions_len = self.instructions.len() as u64;
-    bytes.extend(instructions_len.to_le_bytes());
-    for instruction in self.instructions.iter() {
-      bytes.extend(instruction.to_le_bytes());
-    }
+    let code_len = self.code.len() as u64;
+    bytes.extend(code_len.to_le_bytes());
+    bytes.extend(self.code.clone());
 
     bytes
   }
@@ -149,6 +162,15 @@ impl Constant {
   }
 }
 
+fn read_u8<R>(r: &mut R) -> Result<u8, ParseError>
+where
+  R: Read,
+{
+  let mut bytes = [0u8; 1];
+  r.read_exact(&mut bytes).map_err(ParseError::Io)?;
+  Ok(bytes[0])
+}
+
 fn read_u64<R>(r: &mut R) -> Result<u64, ParseError>
 where
   R: Read,
@@ -183,8 +205,8 @@ mod tests {
     chunk.add_constant(Constant::Int(42));
     chunk.add_constant(Constant::Float(3.14159));
     chunk.add_constant(Constant::Bool(false));
-    chunk.add_instruction(Instruction::Add as u64);
-    chunk.add_instruction(Instruction::Return as u64);
+    chunk.emit(Instruction::Add);
+    chunk.emit(Instruction::Return);
     let bytes = chunk.to_bytes();
     assert_eq!(
       chunk,

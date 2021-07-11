@@ -10,7 +10,7 @@ use crate::{executable::Chunk, instruction::Instruction, value::Value};
 #[derive(Debug)]
 pub enum Error {
   SegmentationFault(usize),
-  InvalidInstruction(u64),
+  InvalidInstruction(u8),
   InvalidConstant(u64),
   InvalidType,
   EmptyStack,
@@ -104,22 +104,30 @@ impl Machine {
     self.stack = Vec::new();
 
     loop {
-      let instruction = chunk
-        .instruction(self.current)
+      let instruction = *chunk
+        .code()
+        .get(self.current)
         .ok_or(Error::SegmentationFault(self.current))?;
-      let instruction = Instruction::from_u64(instruction)
+      let instruction = Instruction::from_u8(instruction)
         .ok_or(Error::InvalidInstruction(instruction))?;
       self.current += 1;
 
       match instruction {
         Instruction::PushConstant => {
+          let index_bytes = [
+            self.advance(chunk)?,
+            self.advance(chunk)?,
+            self.advance(chunk)?,
+            self.advance(chunk)?,
+            self.advance(chunk)?,
+            self.advance(chunk)?,
+            self.advance(chunk)?,
+            self.advance(chunk)?,
+          ];
+          let index = u64::from_le_bytes(index_bytes);
           let constant = chunk
-            .instruction(self.current)
-            .ok_or(Error::SegmentationFault(self.current))?;
-          self.current += 1;
-          let constant = chunk
-            .constant(constant as usize)
-            .ok_or(Error::InvalidConstant(constant))?;
+            .constant(index as usize)
+            .ok_or(Error::InvalidConstant(index))?;
           self.push(constant.into());
         }
         Instruction::Add => {
@@ -198,6 +206,15 @@ impl Machine {
     }
   }
 
+  fn advance(&mut self, chunk: &Chunk) -> Result<u8, Error> {
+    let byte = *chunk
+      .code()
+      .get(self.current)
+      .ok_or(Error::SegmentationFault(self.current))?;
+    self.current += 1;
+    Ok(byte)
+  }
+
   fn push(&mut self, value: Value) {
     self.stack.push(value);
   }
@@ -223,23 +240,23 @@ mod tests {
 
     let mut chunk = Chunk::new();
 
-    let constant = chunk.add_constant(Constant::Float(1.0));
-    chunk.add_instruction(Instruction::PushConstant as u64);
-    chunk.add_instruction(constant as u64);
+    let constant = chunk.add_constant(Constant::Int(1));
+    chunk.emit(Instruction::PushConstant);
+    chunk.emit_bytes(constant.to_le_bytes());
 
     let constant = chunk.add_constant(Constant::Int(2));
-    chunk.add_instruction(Instruction::PushConstant as u64);
-    chunk.add_instruction(constant as u64);
+    chunk.emit(Instruction::PushConstant);
+    chunk.emit_bytes(constant.to_le_bytes());
 
-    chunk.add_instruction(Instruction::Add as u64);
+    chunk.emit(Instruction::Add);
 
-    let constant = chunk.add_constant(Constant::Int(3));
-    chunk.add_instruction(Instruction::PushConstant as u64);
-    chunk.add_instruction(constant as u64);
+    let constant = chunk.add_constant(Constant::Float(3.0));
+    chunk.emit(Instruction::PushConstant);
+    chunk.emit_bytes(constant.to_le_bytes());
 
-    chunk.add_instruction(Instruction::Add as u64);
+    chunk.emit(Instruction::Add);
 
-    chunk.add_instruction(Instruction::Return as u64);
+    chunk.emit(Instruction::Return);
 
     assert_eq!(machine.execute(&chunk).unwrap(), Value::Float(6.0));
   }

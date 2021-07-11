@@ -1,9 +1,9 @@
 use num_derive::FromPrimitive;
 
-#[repr(u64)]
+#[repr(u8)]
 #[derive(Clone, Copy, Debug, FromPrimitive, PartialEq)]
 pub enum Instruction {
-  PushConstant = 1u64,
+  PushConstant = 0,
   Add,
   Subtract,
   Multiply,

@@ -19,7 +19,7 @@ impl Generator {
   pub fn generate(mut self, expression: Spanned<Expression>) -> Chunk {
     let mut chunk = Chunk::new();
     self.expression(&mut chunk, expression.unwrap());
-    chunk.add_instruction(Instruction::Return as u64);
+    chunk.emit(Instruction::Return);
     chunk
   }
 
@@ -60,7 +60,7 @@ impl Generator {
       Token::PipePipe => Instruction::Or,
       _ => unreachable!("invalid operator in binary expression"),
     };
-    chunk.add_instruction(instruction as u64);
+    chunk.emit(instruction);
   }
 
   fn unary_expression(
@@ -75,7 +75,7 @@ impl Generator {
       Token::Bang => Instruction::Not,
       _ => unreachable!("invalid operator in unary expression"),
     };
-    chunk.add_instruction(instruction as u64);
+    chunk.emit(instruction);
   }
 
   fn literal_expression(
@@ -89,8 +89,8 @@ impl Generator {
       LiteralExpression::Bool(bool) => Constant::Bool(bool),
     };
     let constant = chunk.add_constant(constant);
-    chunk.add_instruction(Instruction::PushConstant as u64);
-    chunk.add_instruction(constant as u64);
+    chunk.emit(Instruction::PushConstant);
+    chunk.emit_bytes(constant.to_le_bytes());
   }
 }
 
@@ -114,23 +114,23 @@ mod tests {
     let mut chunk = Chunk::new();
 
     let constant = chunk.add_constant(Constant::Int(1));
-    chunk.add_instruction(Instruction::PushConstant as u64);
-    chunk.add_instruction(constant as u64);
+    chunk.emit(Instruction::PushConstant);
+    chunk.emit_bytes(constant.to_le_bytes());
 
     let constant = chunk.add_constant(Constant::Int(2));
-    chunk.add_instruction(Instruction::PushConstant as u64);
-    chunk.add_instruction(constant as u64);
+    chunk.emit(Instruction::PushConstant);
+    chunk.emit_bytes(constant.to_le_bytes());
 
-    chunk.add_instruction(Instruction::Add as u64);
+    chunk.emit(Instruction::Add);
 
     let constant = chunk.add_constant(Constant::Int(3));
-    chunk.add_instruction(Instruction::PushConstant as u64);
-    chunk.add_instruction(constant as u64);
+    chunk.emit(Instruction::PushConstant);
+    chunk.emit_bytes(constant.to_le_bytes());
 
-    chunk.add_instruction(Instruction::Add as u64);
+    chunk.emit(Instruction::Add);
 
-    chunk.add_instruction(Instruction::Return as u64);
+    chunk.emit(Instruction::Return);
 
-    assert_eq!(generator.generate(dbg!(expression)), chunk);
+    assert_eq!(generator.generate(expression), chunk);
   }
 }
