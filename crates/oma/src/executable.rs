@@ -65,6 +65,20 @@ impl Chunk {
     self.code.len() - N
   }
 
+  pub fn patch_bytes<const N: usize>(
+    &mut self,
+    index: usize,
+    bytes: [u8; N],
+  ) -> usize {
+    for (offset, patch_byte) in bytes.iter().enumerate() {
+      self
+        .code
+        .get_mut(index + offset)
+        .map(|byte| *byte = *patch_byte);
+    }
+    index
+  }
+
   pub fn local(&self, identifier: &str) -> Option<usize> {
     self.locals.get(identifier).copied()
   }
@@ -180,6 +194,23 @@ impl fmt::Display for Chunk {
             } else {
               write!(f, " Invalid")?;
             }
+          }
+        }
+        Instruction::Jump | Instruction::JumpIf => {
+          if offset + 8 <= self.code.len() {
+            let index_bytes = [
+              self.code[offset],
+              self.code[offset + 1],
+              self.code[offset + 2],
+              self.code[offset + 3],
+              self.code[offset + 4],
+              self.code[offset + 5],
+              self.code[offset + 6],
+              self.code[offset + 7],
+            ];
+            let index = u64::from_le_bytes(index_bytes);
+            write!(f, " {:#010x}", index)?;
+            offset += 8;
           }
         }
         _ => {}

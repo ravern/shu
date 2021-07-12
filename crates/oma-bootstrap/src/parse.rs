@@ -1,5 +1,8 @@
 use crate::{
-  ast::{Block, Expression, ExpressionStatement, Statement},
+  ast::{
+    Block, ElseBlock, ElseExpression, Expression, ExpressionStatement,
+    IfExpression, Statement, WhileExpression,
+  },
   lex::{LexError, Lexer},
   span::{Source, Span, Spanned},
   token::Token,
@@ -11,6 +14,7 @@ pub enum ParseError {
   UnexpectedToken(Token),
 }
 
+// TODO: Convert all parse fns to return `*Expression` instead of `Expression`.
 pub struct Parser {
   lexer: Lexer,
   current: Option<Spanned<Token>>,
@@ -147,7 +151,79 @@ impl Parser {
   }
 
   fn expression(&mut self) -> Result<Spanned<Expression>, Spanned<ParseError>> {
-    self.logical_expression()
+    let expression = match self.peek()?.base() {
+      Token::If => self.if_expression()?.map(Expression::If),
+      Token::While => self.while_expression()?.map(Expression::While),
+      _ => self.logical_expression()?,
+    };
+    Ok(expression)
+  }
+
+  fn if_expression(
+    &mut self,
+  ) -> Result<Spanned<IfExpression>, Spanned<ParseError>> {
+    let if_token = self.expect(Token::If)?;
+    let condition = self.expression()?;
+    let block = self.block()?;
+    let else_expression = self.else_expression()?;
+    let span = if let Some(else_expression) = &else_expression {
+      Span::combine(if_token.span(), else_expression.span())
+    } else {
+      Span::combine(if_token.span(), block.span())
+    };
+    let expression = Spanned::new(
+      IfExpression {
+        if_token,
+        condition: Box::new(condition),
+        block,
+        else_expression,
+      },
+      span,
+    );
+    Ok(expression)
+  }
+
+  fn else_expression(
+    &mut self,
+  ) -> Result<Option<Spanned<ElseExpression>>, Spanned<ParseError>> {
+    let else_token = match self.peek()?.base() {
+      Token::Else => self.advance()?,
+      _ => return Ok(None),
+    };
+    let block = if let Token::If = self.peek()?.base() {
+      self.if_expression()?.map(ElseBlock::If)
+    } else {
+      self.block()?.map(ElseBlock::Else)
+    };
+
+    let span = Span::combine(else_token.span(), block.span());
+    let else_expression = Spanned::new(
+      ElseExpression {
+        else_token,
+        block: Box::new(block),
+      },
+      span,
+    );
+    Ok(Some(else_expression))
+  }
+
+  fn while_expression(
+    &mut self,
+  ) -> Result<Spanned<WhileExpression>, Spanned<ParseError>> {
+    let while_token = self.expect(Token::While)?;
+    let condition = self.expression()?;
+    let block = self.block()?;
+
+    let span = Span::combine(while_token.span(), block.span());
+    let expression = Spanned::new(
+      WhileExpression {
+        while_token,
+        condition: Box::new(condition),
+        block,
+      },
+      span,
+    );
+    Ok(expression)
   }
 
   fn logical_expression(

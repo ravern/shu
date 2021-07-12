@@ -4,6 +4,5 @@ version = "0.1.0"
 edition = "2018"
 
 [dependencies]
-rustyline = "8.2"
 oma = { path = "../oma" }
 oma-bootstrap = { path = "../oma-bootstrap" }

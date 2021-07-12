@@ -190,6 +190,9 @@ impl Lexer {
       "impl" => Ok(token.map(|_| Token::Impl)),
       "let" => Ok(token.map(|_| Token::Let)),
       "mut" => Ok(token.map(|_| Token::Mut)),
+      "if" => Ok(token.map(|_| Token::If)),
+      "else" => Ok(token.map(|_| Token::Else)),
+      "while" => Ok(token.map(|_| Token::While)),
       "true" => Ok(token.map(|_| Token::True)),
       "false" => Ok(token.map(|_| Token::False)),
       _ => Ok(token),
@@ -390,7 +393,7 @@ mod tests {
 
   #[test]
   fn keywords() {
-    let lexer = Lexer::new("true false fn mod impl let mut");
+    let lexer = Lexer::new("true false fn mod impl let mut if else while");
     let source = lexer.source().clone();
     let tokens = lexer.collect();
 
@@ -404,7 +407,10 @@ mod tests {
         Ok(Spanned::new(Token::Impl, Span::new(source.clone(), 18, 22))),
         Ok(Spanned::new(Token::Let, Span::new(source.clone(), 23, 26))),
         Ok(Spanned::new(Token::Mut, Span::new(source.clone(), 27, 30))),
-        Ok(Spanned::new(Token::Eof, Span::new(source.clone(), 30, 30))),
+        Ok(Spanned::new(Token::If, Span::new(source.clone(), 31, 33))),
+        Ok(Spanned::new(Token::Else, Span::new(source.clone(), 34, 38))),
+        Ok(Spanned::new(Token::Else, Span::new(source.clone(), 39, 44))),
+        Ok(Spanned::new(Token::Eof, Span::new(source.clone(), 44, 44))),
       ]
     );
   }

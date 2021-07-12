@@ -5,8 +5,9 @@ use oma::{
 
 use crate::{
   ast::{
-    BinaryExpression, BindStatement, Block, Expression, ExpressionStatement,
-    LiteralExpression, Statement, UnaryExpression,
+    BinaryExpression, BindStatement, Block, ElseBlock, Expression,
+    ExpressionStatement, IfExpression, LiteralExpression, Statement,
+    UnaryExpression, WhileExpression,
   },
   span::Spanned,
   token::Token,
@@ -94,6 +95,10 @@ impl Generator {
       Expression::Literal(literal_expression) => {
         self.literal_expression(chunk, literal_expression)
       }
+      Expression::If(if_expression) => self.if_expression(chunk, if_expression),
+      Expression::While(while_expression) => {
+        self.while_expression(chunk, while_expression)
+      }
     }
   }
 
@@ -160,6 +165,59 @@ impl Generator {
     let constant = chunk.add_constant(constant) as u64;
     chunk.emit(Instruction::PushConstant);
     chunk.emit_bytes(constant.to_le_bytes());
+  }
+
+  fn if_expression(&mut self, chunk: &mut Chunk, if_expression: IfExpression) {
+    self.expression(chunk, if_expression.condition.unwrap());
+
+    chunk.emit(Instruction::JumpIf);
+    let jump_if_offset = chunk.emit_bytes(0u64.to_le_bytes());
+
+    if let Some(else_expression) = if_expression.else_expression {
+      match else_expression.unwrap().block.unwrap() {
+        ElseBlock::If(if_expression) => {
+          self.if_expression(chunk, if_expression)
+        }
+        ElseBlock::Else(block) => self.block(chunk, block),
+      }
+    }
+
+    chunk.emit(Instruction::Jump);
+    let jump_offset = chunk.emit_bytes(0u64.to_le_bytes());
+
+    self.block(chunk, if_expression.block.unwrap());
+
+    let u64_bytes_len = 0u64.to_le_bytes().len() as u64;
+    chunk.patch_bytes(
+      jump_if_offset,
+      (jump_offset as u64 + u64_bytes_len).to_le_bytes(),
+    );
+    chunk.patch_bytes(jump_offset, (chunk.code().len() as u64).to_le_bytes());
+  }
+
+  fn while_expression(
+    &mut self,
+    chunk: &mut Chunk,
+    while_expression: WhileExpression,
+  ) {
+    self.expression(chunk, while_expression.condition.unwrap());
+
+    chunk.emit(Instruction::Not);
+    chunk.emit(Instruction::JumpIf);
+    let jump_if_offset = chunk.emit_bytes(0u64.to_le_bytes());
+
+    self.block(chunk, while_expression.block.unwrap());
+
+    chunk.emit(Instruction::Pop);
+
+    let u64_bytes_len = 0u64.to_le_bytes().len() as u64;
+    chunk.emit(Instruction::Jump);
+    chunk.emit_bytes((jump_if_offset as u64 + u64_bytes_len).to_le_bytes());
+
+    chunk
+      .patch_bytes(jump_if_offset, (chunk.code().len() as u64).to_le_bytes());
+
+    chunk.emit(Instruction::PushUnit);
   }
 }
 

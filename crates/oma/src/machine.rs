@@ -130,7 +130,22 @@ impl Machine {
           self.push(Value::Unit);
         }
         Instruction::Pop => {
-          self.pop()?;
+          println!("{}", self.pop()?);
+        }
+        Instruction::Jump => {
+          let offset = self.advance_u64(chunk)?;
+          self.current = offset as usize;
+        }
+        Instruction::JumpIf => {
+          let offset = self.advance_u64(chunk)?;
+
+          if let Value::Bool(bool) = self.pop()? {
+            if bool {
+              self.current = offset as usize;
+            }
+          } else {
+            return Err(Error::InvalidType);
+          }
         }
         Instruction::Add => {
           arithmetic!(add);

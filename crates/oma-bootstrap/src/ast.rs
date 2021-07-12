@@ -64,6 +64,8 @@ pub enum Expression {
   Literal(LiteralExpression),
   Unary(UnaryExpression),
   Binary(BinaryExpression),
+  If(IfExpression),
+  While(WhileExpression),
 }
 
 impl Expression {
@@ -127,4 +129,32 @@ pub enum LiteralExpression {
   Float(f64),
   Bool(bool),
   Identifier(String),
+}
+
+#[derive(Debug, PartialEq)]
+pub struct IfExpression {
+  pub if_token: Spanned<Token>,
+  pub condition: Box<Spanned<Expression>>,
+  pub block: Spanned<Block>,
+  pub else_expression: Option<Spanned<ElseExpression>>,
+}
+
+// TODO: Rename this to something withpout "expression".
+#[derive(Debug, PartialEq)]
+pub struct ElseExpression {
+  pub else_token: Spanned<Token>,
+  pub block: Box<Spanned<ElseBlock>>,
+}
+
+#[derive(Debug, PartialEq)]
+pub enum ElseBlock {
+  Else(Block),
+  If(IfExpression),
+}
+
+#[derive(Debug, PartialEq)]
+pub struct WhileExpression {
+  pub while_token: Spanned<Token>,
+  pub condition: Box<Spanned<Expression>>,
+  pub block: Spanned<Block>,
 }
