@@ -1,14 +1,19 @@
-use test::{one, two::{three::test, four}};
+mod parser {
+  fn new() {
+    Parser {
+      start: 0,
+      end: 0,
+    }
+  }
 
-use foo::bar::baz;
-
-mod test;
-
-fn test(a1, a2, a3) {
-  awafawfa
-}
-
-mod test {
-  fn hello() {
+  fn parse(parser) {
+    // Do some stuff here.
   }
 }
+
+fn main() {
+  let parser = parser::new();
+  parser::parse(parser);
+  parser.parse().parse()
+}
+

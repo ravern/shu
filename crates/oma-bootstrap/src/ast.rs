@@ -1,10 +1,4 @@
-use crate::{lex::LexError, span::Spanned, token::Token};
-
-#[derive(Debug, PartialEq)]
-pub enum ParseError {
-  Lex(LexError),
-  UnexpectedToken(Token),
-}
+use crate::{span::Spanned, token::Token};
 
 #[derive(Debug, PartialEq)]
 pub struct File {
@@ -87,6 +81,7 @@ pub enum Expression {
   Literal(Spanned<Token>),
   Unary(UnaryExpression),
   Binary(BinaryExpression),
+  Assign(AssignExpression),
   If(IfExpression),
   While(WhileExpression),
 }
@@ -102,6 +97,12 @@ pub struct BinaryExpression {
   pub left_operand: Box<Expression>,
   pub operator: Spanned<Token>,
   pub right_operand: Box<Expression>,
+}
+
+#[derive(Debug, PartialEq)]
+pub struct AssignExpression {
+  pub pattern: Pattern,
+  pub operand: Box<Expression>,
 }
 
 #[derive(Debug, PartialEq)]
@@ -125,8 +126,6 @@ pub struct WhileExpression {
 
 #[derive(Debug, PartialEq)]
 pub enum Pattern {
-  Int(i64),
-  Float(f64),
-  Bool(bool),
-  Identifier(String),
+  Literal(Spanned<Token>),
+  __NonExhaustive,
 }

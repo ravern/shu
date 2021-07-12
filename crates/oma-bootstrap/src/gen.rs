@@ -64,11 +64,13 @@ impl Generator {
     bind_statement: BindStatement,
   ) {
     self.expression(chunk, *bind_statement.expression);
-    if let Pattern::Identifier(identifier) = bind_statement.pattern {
-      chunk.add_local(identifier);
-    } else {
-      panic!("cannot assign to non-identifier");
+    if let Pattern::Literal(token) = bind_statement.pattern {
+      if let Token::Identifier = token.base() {
+        chunk.add_local(token.span().as_str().to_string());
+        return;
+      }
     }
+    panic!("cannot assign to non-identifier");
   }
 
   fn expression_statement(
@@ -84,6 +86,7 @@ impl Generator {
 
   fn expression(&mut self, chunk: &mut Chunk, expression: Expression) {
     match expression {
+      Expression::Assign(_) => {}
       Expression::Binary(binary_expression) => {
         self.binary_expression(chunk, binary_expression)
       }

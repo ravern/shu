@@ -2,13 +2,19 @@ use crate::{
   ast::{
     BinaryExpression, BindStatement, Block, ElseBody, Expression,
     ExpressionStatement, File, FnDeclaration, IfExpression, ModDeclaration,
-    ParseError, Pattern, Statement, UnaryExpression, UseDeclaration, UseTree,
+    Pattern, Statement, UnaryExpression, UseDeclaration, UseTree,
     UseTreeBranch, WhileExpression,
   },
-  lex::Lexer,
+  lex::{LexError, Lexer},
   span::{Source, Spanned},
   token::Token,
 };
+
+#[derive(Debug, PartialEq)]
+pub enum ParseError {
+  Lex(LexError),
+  UnexpectedToken(Token),
+}
 
 pub struct Parser {
   lexer: Lexer,
@@ -277,7 +283,7 @@ impl Parser {
       _ => false,
     };
 
-    let pattern = self.pattern()?.unwrap();
+    let pattern = self.pattern()?;
 
     self.expect(Token::Equal)?;
 
@@ -485,53 +491,18 @@ impl Parser {
     }
   }
 
-  fn pattern(&mut self) -> Result<Spanned<Pattern>, Spanned<ParseError>> {
+  fn pattern(&mut self) -> Result<Pattern, Spanned<ParseError>> {
+    self.literal_pattern()
+  }
+
+  fn literal_pattern(&mut self) -> Result<Pattern, Spanned<ParseError>> {
     match self.peek()?.base() {
-      Token::Int => {
-        let int = self.advance()?;
-        let expression = Spanned::new(
-          int
-            .span()
-            .as_str()
-            .parse()
-            .map(Pattern::Int)
-            .or_else(|_| int.span().as_str().parse().map(Pattern::Float))
-            .unwrap(),
-          int.span().clone(),
-        );
-        Ok(expression)
-      }
-      Token::Float => {
-        let float = self.advance()?;
-        let expression = Spanned::new(
-          Pattern::Float(float.span().as_str().parse().unwrap()),
-          float.span().clone(),
-        );
-        Ok(expression)
-      }
-      Token::True => {
-        let bool = self.advance()?;
-        let expression = Spanned::new(Pattern::Bool(true), bool.span().clone());
-        Ok(expression)
-      }
-      Token::False => {
-        let bool = self.advance()?;
-        let expression =
-          Spanned::new(Pattern::Bool(false), bool.span().clone());
-        Ok(expression)
-      }
-      Token::Identifier => {
-        let identifier = self.advance()?;
-        let expression = Spanned::new(
-          Pattern::Identifier(identifier.span().as_str().to_string()),
-          identifier.span().clone(),
-        );
-        Ok(expression)
-      }
-      _ => {
-        let token = self.advance()?;
-        Err(token.map(ParseError::UnexpectedToken))
-      }
+      Token::Int
+      | Token::Float
+      | Token::True
+      | Token::False
+      | Token::Identifier => Ok(Pattern::Literal(self.advance()?)),
+      _ => Err(self.advance()?.map(ParseError::UnexpectedToken)),
     }
   }
 
