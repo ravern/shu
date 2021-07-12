@@ -87,6 +87,9 @@ impl Generator {
   fn expression(&mut self, chunk: &mut Chunk, expression: Expression) {
     match expression {
       Expression::Assign(_) => {}
+      Expression::Path(_) => {}
+      Expression::Call(_) => {}
+      Expression::Access(_) => {}
       Expression::Binary(binary_expression) => {
         self.binary_expression(chunk, binary_expression)
       }

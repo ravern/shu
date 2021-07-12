@@ -2,6 +2,7 @@ mod parse;
 mod lex;
 
 fn main() {
-  one + two
+  hello()();
+  hello::world();
 }
 

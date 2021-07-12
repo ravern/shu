@@ -1,9 +1,9 @@
 use crate::{
   ast::{
-    BinaryExpression, BindStatement, Block, Declaration, ElseBody, Expression,
-    ExpressionStatement, File, FnDeclaration, IfExpression, ModDeclaration,
-    Pattern, Statement, UnaryExpression, UseDeclaration, UseTree,
-    UseTreeBranch, WhileExpression,
+    AccessExpression, BinaryExpression, BindStatement, Block, CallExpression,
+    Declaration, ElseBody, Expression, ExpressionStatement, File,
+    FnDeclaration, IfExpression, ModDeclaration, Path, Pattern, Statement,
+    UnaryExpression, UseDeclaration, UseTree, UseTreeBranch, WhileExpression,
   },
   lex::{LexError, Lexer},
   span::{Source, Spanned},
@@ -33,7 +33,11 @@ macro_rules! binary {
 
       let right_operand = Box::new($self.$parse()?);
 
-      left_operand = Box::new(Expression::Binary(BinaryExpression { left_operand, operator, right_operand }));
+      left_operand = Box::new(
+        Expression::Binary(
+          BinaryExpression { left_operand, operator, right_operand }
+        )
+      );
     }
   };
 }
@@ -475,8 +479,76 @@ impl Parser {
         self.expect(Token::CloseParen)?;
         Ok(expression)
       }
-      _ => Ok(Expression::Literal(self.literal_expression()?)),
+      _ => Ok(self.call_expression()?),
     }
+  }
+
+  fn call_expression(&mut self) -> Result<Expression, Spanned<ParseError>> {
+    let mut receiver = Box::new(self.access_expression()?);
+
+    loop {
+      match self.peek()?.base() {
+        Token::OpenParen => self.advance()?,
+        _ => return Ok(*receiver),
+      };
+
+      let mut arguments = Vec::new();
+      loop {
+        if let Token::CloseParen = self.peek()?.base() {
+          self.advance()?;
+          break;
+        }
+        arguments.push(self.expression()?);
+        if let Token::Comma = self.peek()?.base() {
+          self.advance()?;
+        }
+      }
+
+      receiver = Box::new(Expression::Call(CallExpression {
+        receiver,
+        arguments,
+      }));
+    }
+  }
+
+  fn access_expression(&mut self) -> Result<Expression, Spanned<ParseError>> {
+    let mut receiver = Box::new(self.path_expression()?);
+
+    loop {
+      match self.peek()?.base() {
+        Token::Period => self.advance()?,
+        _ => return Ok(*receiver),
+      };
+
+      let field = match self.peek()?.base() {
+        Token::Identifier | Token::Int => self.advance()?,
+        _ => return Err(self.advance()?.map(ParseError::UnexpectedToken)),
+      };
+
+      receiver =
+        Box::new(Expression::Access(AccessExpression { receiver, field }));
+    }
+  }
+
+  fn path_expression(&mut self) -> Result<Expression, Spanned<ParseError>> {
+    let token = self.literal_expression()?;
+
+    match (token.base(), self.peek()?.base()) {
+      (Token::Identifier, Token::ColonColon) => self.advance()?,
+      _ => return Ok(Expression::Literal(token)),
+    };
+
+    let mut components = vec![token];
+    loop {
+      components.push(self.expect(Token::Identifier)?);
+
+      match self.peek()?.base() {
+        Token::ColonColon => self.advance()?,
+        _ => break,
+      };
+    }
+
+    Ok(Expression::Path(Path { components }))
   }
 
   fn literal_expression(

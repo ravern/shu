@@ -30,11 +30,6 @@ pub struct UseTreeBranch {
 }
 
 #[derive(Debug, PartialEq)]
-pub struct Path {
-  components: Vec<Spanned<Token>>,
-}
-
-#[derive(Debug, PartialEq)]
 pub struct ModDeclaration {
   pub name: Spanned<Token>,
   pub body: Option<File>,
@@ -74,11 +69,26 @@ pub struct ExpressionStatement {
 #[derive(Debug, PartialEq)]
 pub enum Expression {
   Literal(Spanned<Token>),
+  Path(Path),
+  Access(AccessExpression),
+  Call(CallExpression),
   Unary(UnaryExpression),
   Binary(BinaryExpression),
   Assign(AssignExpression),
   If(IfExpression),
   While(WhileExpression),
+}
+
+#[derive(Debug, PartialEq)]
+pub struct AccessExpression {
+  pub receiver: Box<Expression>,
+  pub field: Spanned<Token>,
+}
+
+#[derive(Debug, PartialEq)]
+pub struct CallExpression {
+  pub receiver: Box<Expression>,
+  pub arguments: Vec<Expression>,
 }
 
 #[derive(Debug, PartialEq)]
@@ -117,6 +127,11 @@ pub enum ElseBody {
 pub struct WhileExpression {
   pub condition: Box<Expression>,
   pub body: Block,
+}
+
+#[derive(Debug, PartialEq)]
+pub struct Path {
+  pub components: Vec<Spanned<Token>>,
 }
 
 #[derive(Debug, PartialEq)]
