@@ -59,7 +59,7 @@ where
   }
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, PartialEq)]
 pub struct Span {
   source: Source,
   start: usize,
@@ -84,6 +84,12 @@ impl Span {
 
   pub fn as_str(&self) -> &str {
     self.source.slice(self.start, self.end)
+  }
+}
+
+impl fmt::Debug for Span {
+  fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    write!(f, "{}", self.as_str())
   }
 }
 
@@ -118,11 +124,5 @@ impl Source {
 impl PartialEq for Source {
   fn eq(&self, other: &Self) -> bool {
     Rc::ptr_eq(&self.inner, &other.inner)
-  }
-}
-
-impl fmt::Debug for Source {
-  fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-    write!(f, "some source")
   }
 }

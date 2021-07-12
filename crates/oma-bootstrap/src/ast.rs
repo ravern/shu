@@ -25,26 +25,19 @@ impl File {
 
 #[derive(Debug, PartialEq)]
 pub struct UseDeclaration {
-  pub use_token: Spanned<Token>,
-  pub path_tree: Spanned<UseTree>,
+  pub trees: Vec<UseTree>,
 }
 
 #[derive(Debug, PartialEq)]
 pub enum UseTree {
   Branch(UseTreeBranch),
-  Leaf(Path),
+  Leaf(Spanned<Token>),
 }
 
 #[derive(Debug, PartialEq)]
 pub struct UseTreeBranch {
-  prefix: Spanned<Token>,
-  children: Vec<Spanned<UseTreeBranchChild>>,
-}
-
-#[derive(Debug, PartialEq)]
-pub struct UseTreeBranchChild {
-  tree: Spanned<UseTree>,
-  comma_token: Option<Spanned<Token>>,
+  pub component: Spanned<Token>,
+  pub subtrees: Vec<UseTree>,
 }
 
 #[derive(Debug, PartialEq)]

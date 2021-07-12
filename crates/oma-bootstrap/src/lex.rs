@@ -110,6 +110,14 @@ impl Lexer {
       }
       Some(b',') => self.advance_and_build(Token::Comma),
       Some(b'.') => self.advance_and_build(Token::Period),
+      Some(b':') => {
+        self.advance();
+        match self.peek() {
+          Some(b':') => self.advance_and_build(Token::ColonColon),
+          Some(byte) => self.build_err(LexError::UnexpectedChar(byte)),
+          None => self.build_err(LexError::UnexpectedEof),
+        }
+      }
       Some(b';') => self.advance_and_build(Token::Semicolon),
       Some(b'(') => self.advance_and_build(Token::OpenParen),
       Some(b')') => self.advance_and_build(Token::CloseParen),
@@ -185,6 +193,7 @@ impl Lexer {
 
     let token = self.build(Token::Identifier)?;
     match token.span().as_str() {
+      "use" => Ok(token.map(|_| Token::Use)),
       "mod" => Ok(token.map(|_| Token::Mod)),
       "fn" => Ok(token.map(|_| Token::Fn)),
       "impl" => Ok(token.map(|_| Token::Impl)),

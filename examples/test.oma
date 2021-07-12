@@ -1,13 +1,14 @@
-fn test(foo, bar) {
-  foo +
-}
+use test::{one, two::{three::test, four}};
 
-fn 2(tare) {
-}
+use foo::bar::baz;
 
-awafawfa
-
+mod test;
 
 fn test(a1, a2, a3) {
-awafawfa
+  awafawfa
+}
+
+mod test {
+  fn hello() {
+  }
 }

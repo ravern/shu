@@ -1,8 +1,9 @@
 use crate::{
   ast::{
     BinaryExpression, BindStatement, Block, ElseBody, Expression,
-    ExpressionStatement, File, FnDeclaration, IfExpression, ParseError,
-    Pattern, Statement, UnaryExpression, WhileExpression,
+    ExpressionStatement, File, FnDeclaration, IfExpression, ModDeclaration,
+    ParseError, Pattern, Statement, UnaryExpression, UseDeclaration, UseTree,
+    UseTreeBranch, WhileExpression,
   },
   lex::Lexer,
   span::{Source, Spanned},
@@ -44,10 +45,13 @@ impl Parser {
   }
 
   pub fn parse(mut self) -> Result<File, Vec<Spanned<ParseError>>> {
-    self.file()
+    self.file(false)
   }
 
-  fn file(&mut self) -> Result<File, Vec<Spanned<ParseError>>> {
+  fn file(
+    &mut self,
+    is_within_mod_declaration: bool,
+  ) -> Result<File, Vec<Spanned<ParseError>>> {
     let mut file = File::new();
     let mut errors = Vec::new();
 
@@ -62,10 +66,25 @@ impl Parser {
       };
       match token.base() {
         Token::Eof => break,
+        Token::CloseBrace if is_within_mod_declaration => break,
+        Token::Use => match self.use_declaration() {
+          Ok(use_declaration) => file.use_declarations.push(use_declaration),
+          Err(error) => {
+            errors.push(error);
+            self.synchronize();
+          }
+        },
         Token::Fn => match self.fn_declaration() {
           Ok(fn_declaration) => file.fn_declarations.push(fn_declaration),
           Err(error) => {
             errors.push(error);
+            self.synchronize();
+          }
+        },
+        Token::Mod => match self.mod_declaration() {
+          Ok(mod_declaration) => file.mod_declarations.push(mod_declaration),
+          Err(mod_errors) => {
+            errors.extend(mod_errors);
             self.synchronize();
           }
         },
@@ -77,8 +96,10 @@ impl Parser {
       }
     }
 
-    if let Err(error) = self.expect(Token::Eof) {
-      errors.push(error);
+    if !is_within_mod_declaration {
+      if let Err(error) = self.expect(Token::Eof) {
+        errors.push(error);
+      }
     }
 
     if errors.is_empty() {
@@ -86,6 +107,108 @@ impl Parser {
     } else {
       Err(errors)
     }
+  }
+
+  fn use_declaration(&mut self) -> Result<UseDeclaration, Spanned<ParseError>> {
+    self.expect(Token::Use)?;
+
+    let trees = match self.peek()?.base() {
+      Token::Identifier => vec![self.use_tree()?],
+      Token::OpenBrace => self.use_trees()?,
+      token => {
+        return Err(
+          self
+            .advance()?
+            .map(|_| ParseError::UnexpectedToken(token.clone())),
+        )
+      }
+    };
+
+    self.expect(Token::Semicolon)?;
+
+    Ok(UseDeclaration { trees })
+  }
+
+  fn use_trees(&mut self) -> Result<Vec<UseTree>, Spanned<ParseError>> {
+    self.expect(Token::OpenBrace)?;
+
+    let mut trees = Vec::new();
+    loop {
+      trees.push(self.use_tree()?);
+
+      if let Token::Comma = self.peek()?.base() {
+        self.advance()?;
+      }
+
+      if let Token::CloseBrace = self.peek()?.base() {
+        break;
+      }
+    }
+
+    self.expect(Token::CloseBrace)?;
+
+    Ok(trees)
+  }
+
+  fn use_tree(&mut self) -> Result<UseTree, Spanned<ParseError>> {
+    let component = self.expect(Token::Identifier)?;
+
+    if let Token::ColonColon = self.peek()?.base() {
+      self.advance()?;
+    } else {
+      return Ok(UseTree::Leaf(component));
+    }
+
+    let subtrees = match self.peek()?.base() {
+      Token::Identifier => vec![self.use_tree()?],
+      Token::OpenBrace => self.use_trees()?,
+      token => {
+        return Err(
+          self
+            .advance()?
+            .map(|_| ParseError::UnexpectedToken(token.clone())),
+        )
+      }
+    };
+
+    Ok(UseTree::Branch(UseTreeBranch {
+      component,
+      subtrees,
+    }))
+  }
+
+  // TODO: Improve all the `map_err` calls.
+  fn mod_declaration(
+    &mut self,
+  ) -> Result<ModDeclaration, Vec<Spanned<ParseError>>> {
+    self.expect(Token::Mod).map_err(|error| vec![error])?;
+
+    let name = self
+      .expect(Token::Identifier)
+      .map_err(|error| vec![error])?;
+
+    let body = match self.peek().map_err(|error| vec![error])?.base() {
+      Token::OpenBrace => {
+        self.advance().map_err(|error| vec![error])?;
+        let file = self.file(true)?;
+        self
+          .expect(Token::CloseBrace)
+          .map_err(|error| vec![error])?;
+        Some(file)
+      }
+      Token::Semicolon => {
+        self.advance().map_err(|error| vec![error])?;
+        None
+      }
+      token => {
+        return Err(vec![self
+          .advance()
+          .map_err(|error| vec![error])?
+          .map(|_| ParseError::UnexpectedToken(token.clone()))]);
+      }
+    };
+
+    Ok(ModDeclaration { name, body })
   }
 
   fn fn_declaration(&mut self) -> Result<FnDeclaration, Spanned<ParseError>> {
