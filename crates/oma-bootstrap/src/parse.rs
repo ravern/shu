@@ -1,6 +1,6 @@
 use crate::{
   ast::{
-    BinaryExpression, BindStatement, Block, ElseBody, Expression,
+    BinaryExpression, BindStatement, Block, Declaration, ElseBody, Expression,
     ExpressionStatement, File, FnDeclaration, IfExpression, ModDeclaration,
     Pattern, Statement, UnaryExpression, UseDeclaration, UseTree,
     UseTreeBranch, WhileExpression,
@@ -58,7 +58,7 @@ impl Parser {
     &mut self,
     is_within_mod_declaration: bool,
   ) -> Result<File, Vec<Spanned<ParseError>>> {
-    let mut file = File::new();
+    let mut declarations = Vec::new();
     let mut errors = Vec::new();
 
     loop {
@@ -73,32 +73,13 @@ impl Parser {
       match token.base() {
         Token::Eof => break,
         Token::CloseBrace if is_within_mod_declaration => break,
-        Token::Use => match self.use_declaration() {
-          Ok(use_declaration) => file.use_declarations.push(use_declaration),
-          Err(error) => {
-            errors.push(error);
+        _ => match self.declaration() {
+          Ok(declaration) => declarations.push(declaration),
+          Err(declaration_errors) => {
+            errors.extend(declaration_errors);
             self.synchronize();
           }
         },
-        Token::Fn => match self.fn_declaration() {
-          Ok(fn_declaration) => file.fn_declarations.push(fn_declaration),
-          Err(error) => {
-            errors.push(error);
-            self.synchronize();
-          }
-        },
-        Token::Mod => match self.mod_declaration() {
-          Ok(mod_declaration) => file.mod_declarations.push(mod_declaration),
-          Err(mod_errors) => {
-            errors.extend(mod_errors);
-            self.synchronize();
-          }
-        },
-        _ => {
-          let error = ParseError::UnexpectedToken(token.base().clone());
-          errors.push(token.map(|_| error));
-          self.synchronize();
-        }
       }
     }
 
@@ -109,9 +90,29 @@ impl Parser {
     }
 
     if errors.is_empty() {
-      Ok(file)
+      Ok(File { declarations })
     } else {
       Err(errors)
+    }
+  }
+
+  fn declaration(&mut self) -> Result<Declaration, Vec<Spanned<ParseError>>> {
+    match self.peek().map_err(|error| vec![error])?.base() {
+      Token::Use => self
+        .use_declaration()
+        .map(Declaration::Use)
+        .map_err(|error| vec![error]),
+      Token::Mod => self.mod_declaration().map(Declaration::Mod),
+      Token::Fn => self
+        .fn_declaration()
+        .map(Declaration::Fn)
+        .map_err(|error| vec![error]),
+      token => {
+        return Err(vec![self
+          .advance()
+          .map_err(|error| vec![error])?
+          .map(|_| ParseError::UnexpectedToken(token.clone()))])
+      }
     }
   }
 

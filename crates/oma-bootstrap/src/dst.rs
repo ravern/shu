@@ -2,14 +2,19 @@ use crate::{span::Spanned, token::Token};
 
 #[derive(Debug, PartialEq)]
 pub struct File {
-  pub declarations: Vec<Declaration>,
+  pub mod_declarations: Vec<ModDeclaration>,
+  pub use_declarations: Vec<UseDeclaration>,
+  pub fn_declarations: Vec<FnDeclaration>,
 }
 
-#[derive(Debug, PartialEq)]
-pub enum Declaration {
-  Use(UseDeclaration),
-  Mod(ModDeclaration),
-  Fn(FnDeclaration),
+impl File {
+  pub fn new() -> File {
+    File {
+      mod_declarations: Vec::new(),
+      use_declarations: Vec::new(),
+      fn_declarations: Vec::new(),
+    }
+  }
 }
 
 #[derive(Debug, PartialEq)]
