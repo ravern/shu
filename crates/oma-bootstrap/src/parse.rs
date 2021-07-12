@@ -1,11 +1,11 @@
 use crate::{
   ast::{
-    Block, Declaration, ElseBlock, ElseBody, Expression, ExpressionStatement,
-    File, FnDeclaration, FnParameter, FnParameters, IfExpression, ParseError,
-    Pattern, Statement, WhileExpression,
+    BinaryExpression, BindStatement, Block, ElseBody, Expression,
+    ExpressionStatement, File, FnDeclaration, IfExpression, ParseError,
+    Pattern, Statement, UnaryExpression, WhileExpression,
   },
   lex::Lexer,
-  span::{Source, Span, Spanned},
+  span::{Source, Spanned},
   token::Token,
 };
 
@@ -16,24 +16,17 @@ pub struct Parser {
 
 macro_rules! binary {
   ($self:ident, $parse:ident, $($tokens:pat)|+ $(,)?) => {
-    let mut left_operand = $self.$parse()?;
+    let mut left_operand = Box::new($self.$parse()?);
 
     loop {
       let operator = match $self.peek()?.base() {
         $($tokens)|+ => $self.advance()?,
-        _ => return Ok(left_operand),
+        _ => return Ok(*left_operand),
       };
 
-      let right_operand = $self.$parse()?;
+      let right_operand = Box::new($self.$parse()?);
 
-      let span = Span::combine(
-        left_operand.span(),
-        &Span::combine(operator.span(), right_operand.span()),
-      );
-      left_operand = Spanned::new(
-        Expression::binary(operator, left_operand, right_operand),
-        span,
-      );
+      left_operand = Box::new(Expression::Binary(BinaryExpression { left_operand, operator, right_operand }));
     }
   };
 }
@@ -50,143 +43,87 @@ impl Parser {
     self.lexer.source()
   }
 
-  pub fn parse(mut self) -> Spanned<File> {
+  pub fn parse(mut self) -> Result<File, Vec<Spanned<ParseError>>> {
     self.file()
   }
 
-  fn file(&mut self) -> Spanned<File> {
-    let mut declarations: Vec<Spanned<Declaration>> = Vec::new();
+  fn file(&mut self) -> Result<File, Vec<Spanned<ParseError>>> {
+    let mut file = File::new();
+    let mut errors = Vec::new();
+
     loop {
-      match self.peek().map(|token| token.base().clone()) {
-        Ok(Token::Eof) => break,
-        Ok(_) => match self.declaration() {
-          Ok(declaration) => declarations.push(declaration),
+      let token = match self.peek() {
+        Ok(token) => token,
+        Err(error) => {
+          errors.push(error);
+          self.synchronize();
+          continue;
+        }
+      };
+      match token.base() {
+        Token::Eof => break,
+        Token::Fn => match self.fn_declaration() {
+          Ok(fn_declaration) => file.fn_declarations.push(fn_declaration),
           Err(error) => {
+            errors.push(error);
             self.synchronize();
-            declarations.push(error.map(Declaration::Err));
           }
         },
-        Err(error) => {
+        _ => {
+          let error = ParseError::UnexpectedToken(token.base().clone());
+          errors.push(token.map(|_| error));
           self.synchronize();
-          declarations.push(error.map(Declaration::Err));
         }
       }
     }
 
-    let eof_token = self
-      .expect(Token::Eof)
-      .expect("expected Eof token after all declarations");
+    if let Err(error) = self.expect(Token::Eof) {
+      errors.push(error);
+    }
 
-    let span = Span::combine(
-      declarations
-        .first()
-        .map(|declaration| declaration.span())
-        .unwrap_or(eof_token.span()),
-      eof_token.span(),
-    );
-    Spanned::new(
-      File {
-        declarations,
-        eof_token,
-      },
-      span,
-    )
-  }
-
-  // TODO: figure out exactly what point we should synchronise
-  fn declaration(
-    &mut self,
-  ) -> Result<Spanned<Declaration>, Spanned<ParseError>> {
-    match self.peek()?.base() {
-      Token::Fn => self.fn_declaration(),
-      _ => {
-        let token = self.advance()?;
-        Err(token.map(ParseError::UnexpectedToken))
-      }
+    if errors.is_empty() {
+      Ok(file)
+    } else {
+      Err(errors)
     }
   }
 
-  fn fn_declaration(
-    &mut self,
-  ) -> Result<Spanned<Declaration>, Spanned<ParseError>> {
-    let fn_token = self.expect(Token::Fn)?;
+  fn fn_declaration(&mut self) -> Result<FnDeclaration, Spanned<ParseError>> {
+    self.expect(Token::Fn)?;
+
     let name = self.expect(Token::Identifier)?;
-    let parameters = self.fn_parameters()?;
-    let body = self.block()?;
 
-    let span = Span::combine(fn_token.span(), body.span());
-    let declaration = Spanned::new(
-      Declaration::Fn(FnDeclaration {
-        fn_token,
-        name,
-        parameters,
-        body,
-      }),
-      span,
-    );
-    Ok(declaration)
-  }
-
-  fn fn_parameters(
-    &mut self,
-  ) -> Result<Spanned<FnParameters>, Spanned<ParseError>> {
-    let open_paren_token = self.expect(Token::OpenParen)?;
-
+    self.expect(Token::OpenParen)?;
     let mut parameters = Vec::new();
     loop {
       if let Token::CloseParen = self.peek()?.base() {
         break;
       }
 
-      let name = self.expect(Token::Identifier)?;
-      let comma_token = if let Token::Comma = self.peek()?.base() {
-        Some(self.advance()?)
-      } else {
-        if let Token::CloseParen = self.peek()?.base() {
-          None
-        } else {
-          return Err(self.peek()?.map(ParseError::UnexpectedToken));
-        }
-      };
+      let parameter = self.expect(Token::Identifier)?;
+      parameters.push(parameter);
 
-      let span = if let Some(comma_token) = &comma_token {
-        Span::combine(name.span(), comma_token.span())
-      } else {
-        name.span().clone()
-      };
-      let parameter = FnParameter { name, comma_token };
-
-      parameters.push(Spanned::new(parameter, span));
+      if let Token::Comma = self.peek()?.base() {
+        self.advance()?;
+      }
     }
+    self.expect(Token::CloseParen)?;
 
-    let close_paren_token = self.expect(Token::CloseParen)?;
+    let body = self.block()?;
 
-    let span = Span::combine(open_paren_token.span(), close_paren_token.span());
-    let fn_parameters = Spanned::new(
-      FnParameters {
-        open_paren_token,
-        parameters,
-        close_paren_token,
-      },
-      span,
-    );
-    Ok(fn_parameters)
+    Ok(FnDeclaration {
+      name,
+      parameters,
+      body,
+    })
   }
 
-  fn block(&mut self) -> Result<Spanned<Block>, Spanned<ParseError>> {
-    let open_brace_token = self.expect(Token::OpenBrace)?;
+  fn block(&mut self) -> Result<Block, Spanned<ParseError>> {
+    self.expect(Token::OpenBrace)?;
 
-    let mut statements: Vec<Spanned<Statement>> = Vec::new();
+    let mut statements = Vec::new();
     loop {
       if let Token::CloseBrace = self.peek()?.base() {
-        break;
-      }
-
-      if let Some(Statement::Expression(ExpressionStatement {
-        semicolon_token: None,
-        ..
-      })) = statements.last().map(|statement| statement.base())
-      {
         break;
       }
 
@@ -194,153 +131,114 @@ impl Parser {
       statements.push(statement);
     }
 
-    let close_brace_token = self.expect(Token::CloseBrace)?;
+    self.expect(Token::CloseBrace)?;
 
-    let span = Span::combine(open_brace_token.span(), close_brace_token.span());
-    let block = Spanned::new(
-      Block {
-        open_brace_token,
-        statements,
-        close_brace_token,
-      },
-      span,
-    );
-    Ok(block)
+    Ok(Block { statements })
   }
 
-  fn statement(&mut self) -> Result<Spanned<Statement>, Spanned<ParseError>> {
+  fn statement(&mut self) -> Result<Statement, Spanned<ParseError>> {
     match self.peek()?.base() {
       Token::Let => self.bind_statement(),
       _ => self.expression_statement(),
     }
   }
 
-  fn bind_statement(
-    &mut self,
-  ) -> Result<Spanned<Statement>, Spanned<ParseError>> {
-    let let_token = self.expect(Token::Let)?;
-    let mut_token = match self.peek()?.base() {
-      Token::Mut => Some(self.advance()?),
-      _ => None,
+  fn bind_statement(&mut self) -> Result<Statement, Spanned<ParseError>> {
+    self.expect(Token::Let)?;
+
+    let is_mut = match self.peek()?.base() {
+      Token::Mut => {
+        self.advance()?;
+        true
+      }
+      _ => false,
     };
-    let pattern = self.pattern()?;
-    let equal_token = self.expect(Token::Equal)?;
-    let expression = self.expression()?;
-    let semicolon_token = self.expect(Token::Semicolon)?;
-    let span = Span::combine(let_token.span(), semicolon_token.span());
-    let statement = Spanned::new(
-      Statement::bind(
-        let_token,
-        mut_token,
-        pattern,
-        equal_token,
-        expression,
-        semicolon_token,
-      ),
-      span,
-    );
-    Ok(statement)
+
+    let pattern = self.pattern()?.unwrap();
+
+    self.expect(Token::Equal)?;
+
+    let expression = Box::new(self.expression()?);
+
+    self.expect(Token::Semicolon)?;
+
+    Ok(Statement::Bind(BindStatement {
+      is_mut,
+      pattern,
+      expression,
+    }))
   }
 
-  fn expression_statement(
-    &mut self,
-  ) -> Result<Spanned<Statement>, Spanned<ParseError>> {
+  fn expression_statement(&mut self) -> Result<Statement, Spanned<ParseError>> {
     let expression = self.expression()?;
-    let semicolon_token = if let Token::Semicolon = self.peek()?.base() {
-      Some(self.expect(Token::Semicolon)?)
-    } else {
-      None
-    };
-    let span = if let Some(semicolon_token) = &semicolon_token {
-      Span::combine(expression.span(), semicolon_token.span())
-    } else {
-      expression.span().clone()
-    };
-    let statement =
-      Spanned::new(Statement::expression(expression, semicolon_token), span);
-    Ok(statement)
+
+    let mut has_semicolon = false;
+    if let Token::Semicolon = self.peek()?.base() {
+      self.advance()?;
+      has_semicolon = true;
+    }
+
+    Ok(Statement::Expression(ExpressionStatement {
+      expression,
+      has_semicolon,
+    }))
   }
 
-  fn expression(&mut self) -> Result<Spanned<Expression>, Spanned<ParseError>> {
+  fn expression(&mut self) -> Result<Expression, Spanned<ParseError>> {
     let expression = match self.peek()?.base() {
-      Token::If => self.if_expression()?.map(Expression::If),
-      Token::While => self.while_expression()?.map(Expression::While),
+      Token::If => Expression::If(self.if_expression()?),
+      Token::While => Expression::While(self.while_expression()?),
       _ => self.logical_expression()?,
     };
     Ok(expression)
   }
 
-  fn if_expression(
-    &mut self,
-  ) -> Result<Spanned<IfExpression>, Spanned<ParseError>> {
-    let if_token = self.expect(Token::If)?;
+  fn if_expression(&mut self) -> Result<IfExpression, Spanned<ParseError>> {
+    self.expect(Token::If)?;
+
     let condition = self.expression()?;
+
     let body = self.block()?;
+
     let else_body = self.else_body()?;
 
-    let span = if let Some(else_expression) = &else_body {
-      Span::combine(if_token.span(), else_expression.span())
-    } else {
-      Span::combine(if_token.span(), body.span())
-    };
-    let expression = Spanned::new(
-      IfExpression {
-        if_token,
-        condition: Box::new(condition),
-        body,
-        else_body,
-      },
-      span,
-    );
-    Ok(expression)
+    Ok(IfExpression {
+      condition: Box::new(condition),
+      body,
+      else_body,
+    })
   }
 
-  fn else_body(
-    &mut self,
-  ) -> Result<Option<Spanned<ElseBody>>, Spanned<ParseError>> {
-    let else_token = match self.peek()?.base() {
+  fn else_body(&mut self) -> Result<Option<ElseBody>, Spanned<ParseError>> {
+    match self.peek()?.base() {
       Token::Else => self.advance()?,
       _ => return Ok(None),
     };
+
     let block = if let Token::If = self.peek()?.base() {
-      self.if_expression()?.map(ElseBlock::If)
+      ElseBody::If(Box::new(self.if_expression()?))
     } else {
-      self.block()?.map(ElseBlock::Else)
+      ElseBody::Else(self.block()?)
     };
 
-    let span = Span::combine(else_token.span(), block.span());
-    let else_expression = Spanned::new(
-      ElseBody {
-        else_token,
-        block: Box::new(block),
-      },
-      span,
-    );
-    Ok(Some(else_expression))
+    Ok(Some(block))
   }
 
   fn while_expression(
     &mut self,
-  ) -> Result<Spanned<WhileExpression>, Spanned<ParseError>> {
-    let while_token = self.expect(Token::While)?;
+  ) -> Result<WhileExpression, Spanned<ParseError>> {
+    self.expect(Token::While)?;
+
     let condition = self.expression()?;
     let body = self.block()?;
 
-    let span = Span::combine(while_token.span(), body.span());
-    let expression = Spanned::new(
-      WhileExpression {
-        while_token,
-        condition: Box::new(condition),
-        body,
-      },
-      span,
-    );
-    Ok(expression)
+    Ok(WhileExpression {
+      condition: Box::new(condition),
+      body,
+    })
   }
 
-  fn logical_expression(
-    &mut self,
-  ) -> Result<Spanned<Expression>, Spanned<ParseError>> {
+  fn logical_expression(&mut self) -> Result<Expression, Spanned<ParseError>> {
     binary! {
       self,
       equality_expression,
@@ -348,27 +246,27 @@ impl Parser {
     }
   }
 
-  fn equality_expression(
-    &mut self,
-  ) -> Result<Spanned<Expression>, Spanned<ParseError>> {
-    let left_operand = self.comparison_expression()?;
+  fn equality_expression(&mut self) -> Result<Expression, Spanned<ParseError>> {
+    let left_operand = Box::new(self.comparison_expression()?);
 
-    let operator_token = match self.peek()?.base() {
-      Token::EqualEqual | Token::BangEqual => self.advance()?,
-      _ => return Ok(left_operand),
+    let operator = match self.peek()?.base() {
+      Token::Greater | Token::GreaterEqual | Token::Less | Token::LessEqual => {
+        self.advance()?
+      }
+      _ => return Ok(*left_operand),
     };
 
-    let right_operand = self.comparison_expression()?;
+    let right_operand = Box::new(self.comparison_expression()?);
 
-    let span = Span::combine(left_operand.span(), right_operand.span());
-    let expression = Spanned::new(
-      Expression::binary(operator_token, left_operand, right_operand),
-      span,
-    );
+    let expression = Expression::Binary(BinaryExpression {
+      left_operand,
+      operator,
+      right_operand,
+    });
 
     let token = self.peek()?;
     match token.base() {
-      Token::EqualEqual | Token::BangEqual => {
+      Token::Greater | Token::GreaterEqual | Token::Less | Token::LessEqual => {
         let span = token.span().clone();
         return Err(Spanned::new(
           ParseError::UnexpectedToken(token.unwrap()),
@@ -383,23 +281,23 @@ impl Parser {
 
   fn comparison_expression(
     &mut self,
-  ) -> Result<Spanned<Expression>, Spanned<ParseError>> {
-    let left_operand = self.addition_expression()?;
+  ) -> Result<Expression, Spanned<ParseError>> {
+    let left_operand = Box::new(self.addition_expression()?);
 
-    let operator_token = match self.peek()?.base() {
+    let operator = match self.peek()?.base() {
       Token::Greater | Token::GreaterEqual | Token::Less | Token::LessEqual => {
         self.advance()?
       }
-      _ => return Ok(left_operand),
+      _ => return Ok(*left_operand),
     };
 
-    let right_operand = self.addition_expression()?;
+    let right_operand = Box::new(self.addition_expression()?);
 
-    let span = Span::combine(left_operand.span(), right_operand.span());
-    let expression = Spanned::new(
-      Expression::binary(operator_token, left_operand, right_operand),
-      span,
-    );
+    let expression = Expression::Binary(BinaryExpression {
+      left_operand,
+      operator,
+      right_operand,
+    });
 
     let token = self.peek()?;
     match token.base() {
@@ -416,9 +314,7 @@ impl Parser {
     Ok(expression)
   }
 
-  fn addition_expression(
-    &mut self,
-  ) -> Result<Spanned<Expression>, Spanned<ParseError>> {
+  fn addition_expression(&mut self) -> Result<Expression, Spanned<ParseError>> {
     binary! {
       self,
       multiplication_expression,
@@ -428,7 +324,7 @@ impl Parser {
 
   fn multiplication_expression(
     &mut self,
-  ) -> Result<Spanned<Expression>, Spanned<ParseError>> {
+  ) -> Result<Expression, Spanned<ParseError>> {
     binary! {
       self,
       unary_expression,
@@ -436,83 +332,33 @@ impl Parser {
     }
   }
 
-  fn unary_expression(
-    &mut self,
-  ) -> Result<Spanned<Expression>, Spanned<ParseError>> {
+  fn unary_expression(&mut self) -> Result<Expression, Spanned<ParseError>> {
     match self.peek()?.base() {
       Token::Dash | Token::Bang => {
-        let operator_token = self.advance()?;
-        let operand = self.unary_expression()?;
-        let span = Span::combine(operator_token.span(), operand.span());
-        Ok(Spanned::new(
-          Expression::unary(operator_token, operand),
-          span,
-        ))
+        let operator = self.advance()?;
+        let operand = Box::new(self.unary_expression()?);
+        Ok(Expression::Unary(UnaryExpression { operator, operand }))
       }
       Token::OpenParen => {
-        let open_paren = self.advance()?;
+        self.advance()?;
         let expression = self.expression()?;
-        let close_paren = self.expect(Token::CloseParen)?;
-        let span = Span::combine(
-          open_paren.span(),
-          &Span::combine(expression.span(), close_paren.span()),
-        );
-        Ok(Spanned::new(expression.unwrap(), span))
+        self.expect(Token::CloseParen)?;
+        Ok(expression)
       }
-      _ => self.literal_expression(),
+      _ => Ok(Expression::Literal(self.literal_expression()?)),
     }
   }
 
   fn literal_expression(
     &mut self,
-  ) -> Result<Spanned<Expression>, Spanned<ParseError>> {
+  ) -> Result<Spanned<Token>, Spanned<ParseError>> {
     match self.peek()?.base() {
-      Token::Int => {
-        let int = self.advance()?;
-        let expression = Spanned::new(
-          int
-            .span()
-            .as_str()
-            .parse()
-            .map(Expression::int)
-            .or_else(|_| int.span().as_str().parse().map(Expression::float))
-            .unwrap(),
-          int.span().clone(),
-        );
-        Ok(expression)
-      }
-      Token::Float => {
-        let float = self.advance()?;
-        let expression = Spanned::new(
-          Expression::float(float.span().as_str().parse().unwrap()),
-          float.span().clone(),
-        );
-        Ok(expression)
-      }
-      Token::True => {
-        let bool = self.advance()?;
-        let expression =
-          Spanned::new(Expression::bool(true), bool.span().clone());
-        Ok(expression)
-      }
-      Token::False => {
-        let bool = self.advance()?;
-        let expression =
-          Spanned::new(Expression::bool(false), bool.span().clone());
-        Ok(expression)
-      }
-      Token::Identifier => {
-        let identifier = self.advance()?;
-        let expression = Spanned::new(
-          Expression::identifier(identifier.span().as_str().to_string()),
-          identifier.span().clone(),
-        );
-        Ok(expression)
-      }
-      _ => {
-        let token = self.advance()?;
-        Err(token.map(ParseError::UnexpectedToken))
-      }
+      Token::Int
+      | Token::Float
+      | Token::True
+      | Token::False
+      | Token::Identifier => Ok(self.advance()?),
+      _ => Err(self.advance()?.map(ParseError::UnexpectedToken)),
     }
   }
 
@@ -624,85 +470,5 @@ impl Parser {
     } else {
       Err(spanned_token.map(ParseError::UnexpectedToken))
     }
-  }
-}
-
-#[cfg(test)]
-mod tests {
-  use pretty_assertions::assert_eq;
-
-  use crate::{
-    ast::{Expression, Statement},
-    span::{Span, Spanned},
-    token::Token,
-  };
-
-  use super::Parser;
-
-  #[test]
-  fn operations() {
-    let mut parser = Parser::new("1 + 2 * 3 - 4 / 5;");
-    let source = parser.source().clone();
-    let statement = parser.statement().unwrap();
-
-    assert_eq!(
-      statement,
-      Spanned::new(
-        Statement::expression(
-          Spanned::new(
-            Expression::binary(
-              Spanned::new(Token::Dash, Span::new(source.clone(), 10, 11)),
-              Spanned::new(
-                Expression::binary(
-                  Spanned::new(Token::Plus, Span::new(source.clone(), 2, 3)),
-                  Spanned::new(
-                    Expression::int(1),
-                    Span::new(source.clone(), 0, 1)
-                  ),
-                  Spanned::new(
-                    Expression::binary(
-                      Spanned::new(
-                        Token::Star,
-                        Span::new(source.clone(), 6, 7)
-                      ),
-                      Spanned::new(
-                        Expression::int(2),
-                        Span::new(source.clone(), 4, 5)
-                      ),
-                      Spanned::new(
-                        Expression::int(3),
-                        Span::new(source.clone(), 8, 9)
-                      ),
-                    ),
-                    Span::new(source.clone(), 4, 9)
-                  ),
-                ),
-                Span::new(source.clone(), 0, 9),
-              ),
-              Spanned::new(
-                Expression::binary(
-                  Spanned::new(Token::Slash, Span::new(source.clone(), 14, 15)),
-                  Spanned::new(
-                    Expression::int(4),
-                    Span::new(source.clone(), 12, 13)
-                  ),
-                  Spanned::new(
-                    Expression::int(5),
-                    Span::new(source.clone(), 16, 17)
-                  ),
-                ),
-                Span::new(source.clone(), 12, 17)
-              )
-            ),
-            Span::new(source.clone(), 0, 17)
-          ),
-          Some(Spanned::new(
-            Token::Semicolon,
-            Span::new(source.clone(), 17, 18)
-          ))
-        ),
-        Span::new(source.clone(), 0, 18)
-      )
-    );
   }
 }

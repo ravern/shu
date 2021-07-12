@@ -5,9 +5,9 @@ use oma::{
 
 use crate::{
   ast::{
-    BinaryExpression, BindStatement, Block, ElseBlock, Expression,
-    ExpressionStatement, IfExpression, LiteralExpression, Pattern, Statement,
-    UnaryExpression, WhileExpression,
+    BinaryExpression, BindStatement, Block, ElseBody, Expression,
+    ExpressionStatement, IfExpression, Pattern, Statement, UnaryExpression,
+    WhileExpression,
   },
   span::Spanned,
   token::Token,
@@ -20,9 +20,9 @@ impl Generator {
     Generator {}
   }
 
-  pub fn generate(mut self, block: Spanned<Block>) -> Chunk {
+  pub fn generate(mut self, block: Block) -> Chunk {
     let mut chunk = Chunk::new();
-    self.block(&mut chunk, block.unwrap());
+    self.block(&mut chunk, block);
     chunk.emit(Instruction::Return);
     chunk
   }
@@ -32,15 +32,15 @@ impl Generator {
       .statements
       .last()
       .map(|statement| {
-        if let Statement::Expression(expression_statement) = statement.base() {
-          expression_statement.semicolon_token.is_some()
+        if let Statement::Expression(expression_statement) = statement {
+          expression_statement.has_semicolon
         } else {
           true
         }
       })
       .unwrap_or(true);
     for statement in block.statements {
-      self.statement(chunk, statement.unwrap())
+      self.statement(chunk, statement)
     }
     if requires_unit_return {
       chunk.emit(Instruction::PushUnit);
@@ -63,8 +63,8 @@ impl Generator {
     chunk: &mut Chunk,
     bind_statement: BindStatement,
   ) {
-    self.expression(chunk, bind_statement.expression.unwrap());
-    if let Pattern::Identifier(identifier) = bind_statement.pattern.unwrap() {
+    self.expression(chunk, *bind_statement.expression);
+    if let Pattern::Identifier(identifier) = bind_statement.pattern {
       chunk.add_local(identifier);
     } else {
       panic!("cannot assign to non-identifier");
@@ -76,8 +76,8 @@ impl Generator {
     chunk: &mut Chunk,
     expression_statement: ExpressionStatement,
   ) {
-    self.expression(chunk, expression_statement.expression.unwrap());
-    if expression_statement.semicolon_token.is_some() {
+    self.expression(chunk, expression_statement.expression);
+    if expression_statement.has_semicolon {
       chunk.emit(Instruction::Pop);
     }
   }
@@ -105,10 +105,10 @@ impl Generator {
     chunk: &mut Chunk,
     binary_expression: BinaryExpression,
   ) {
-    self.expression(chunk, binary_expression.left_operand.unwrap());
-    self.expression(chunk, binary_expression.right_operand.unwrap());
+    self.expression(chunk, *binary_expression.left_operand);
+    self.expression(chunk, *binary_expression.right_operand);
 
-    let instruction = match binary_expression.operator_token.base() {
+    let instruction = match binary_expression.operator.base() {
       Token::Plus => Instruction::Add,
       Token::Dash => Instruction::Subtract,
       Token::Star => Instruction::Multiply,
@@ -131,9 +131,9 @@ impl Generator {
     chunk: &mut Chunk,
     unary_expression: UnaryExpression,
   ) {
-    self.expression(chunk, unary_expression.operand.unwrap());
+    self.expression(chunk, *unary_expression.operand);
 
-    let instruction = match unary_expression.operator_token.base() {
+    let instruction = match unary_expression.operator.base() {
       Token::Dash => Instruction::Negate,
       Token::Bang => Instruction::Not,
       _ => unreachable!("invalid operator in unary expression"),
@@ -141,49 +141,48 @@ impl Generator {
     chunk.emit(instruction);
   }
 
-  fn literal_expression(
-    &mut self,
-    chunk: &mut Chunk,
-    literal_expression: LiteralExpression,
-  ) {
-    let constant = match literal_expression {
-      LiteralExpression::Int(int) => Constant::Int(int),
-      LiteralExpression::Float(float) => Constant::Float(float),
-      LiteralExpression::Bool(bool) => Constant::Bool(bool),
-      LiteralExpression::Identifier(identifier) => {
+  fn literal_expression(&mut self, chunk: &mut Chunk, token: Spanned<Token>) {
+    let constant = match token.base() {
+      Token::Int => Constant::Int(token.span().as_str().parse().unwrap()),
+      Token::Float => Constant::Float(token.span().as_str().parse().unwrap()),
+      Token::True => Constant::Bool(true),
+      Token::False => Constant::Bool(false),
+      Token::Identifier => {
+        let identifier = token.span().as_str().to_string();
         let index = chunk
           .local(&identifier)
-          .expect(&format!("local '{}' not defined", identifier))
+          .expect(format!("local '{}' not defined", identifier).as_str())
           as u64;
         chunk.emit(Instruction::PushLocal);
         chunk.emit_bytes(index.to_le_bytes());
         return;
       }
+      _ => unreachable!("invalid token passed to literal expression"),
     };
-    let constant = chunk.add_constant(constant) as u64;
+    let index = chunk.add_constant(constant) as u64;
     chunk.emit(Instruction::PushConstant);
-    chunk.emit_bytes(constant.to_le_bytes());
+    chunk.emit_bytes(index.to_le_bytes());
   }
 
   fn if_expression(&mut self, chunk: &mut Chunk, if_expression: IfExpression) {
-    self.expression(chunk, if_expression.condition.unwrap());
+    self.expression(chunk, *if_expression.condition);
 
     chunk.emit(Instruction::JumpIf);
     let jump_if_offset = chunk.emit_bytes(0u64.to_le_bytes());
 
-    if let Some(else_expression) = if_expression.else_body {
-      match else_expression.unwrap().block.unwrap() {
-        ElseBlock::If(if_expression) => {
-          self.if_expression(chunk, if_expression)
+    if let Some(else_body) = if_expression.else_body {
+      match else_body {
+        ElseBody::If(if_expression) => {
+          self.if_expression(chunk, *if_expression)
         }
-        ElseBlock::Else(block) => self.block(chunk, block),
+        ElseBody::Else(block) => self.block(chunk, block),
       }
     }
 
     chunk.emit(Instruction::Jump);
     let jump_offset = chunk.emit_bytes(0u64.to_le_bytes());
 
-    self.block(chunk, if_expression.body.unwrap());
+    self.block(chunk, if_expression.body);
 
     let u64_bytes_len = 0u64.to_le_bytes().len() as u64;
     chunk.patch_bytes(
@@ -198,13 +197,13 @@ impl Generator {
     chunk: &mut Chunk,
     while_expression: WhileExpression,
   ) {
-    self.expression(chunk, while_expression.condition.unwrap());
+    self.expression(chunk, *while_expression.condition);
 
     chunk.emit(Instruction::Not);
     chunk.emit(Instruction::JumpIf);
     let jump_if_offset = chunk.emit_bytes(0u64.to_le_bytes());
 
-    self.block(chunk, while_expression.body.unwrap());
+    self.block(chunk, while_expression.body);
 
     chunk.emit(Instruction::Pop);
 

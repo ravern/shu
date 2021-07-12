@@ -8,16 +8,19 @@ pub enum ParseError {
 
 #[derive(Debug, PartialEq)]
 pub struct File {
-  pub declarations: Vec<Spanned<Declaration>>,
-  pub eof_token: Spanned<Token>,
+  pub mod_declarations: Vec<ModDeclaration>,
+  pub use_declarations: Vec<UseDeclaration>,
+  pub fn_declarations: Vec<FnDeclaration>,
 }
 
-#[derive(Debug, PartialEq)]
-pub enum Declaration {
-  Use(UseDeclaration),
-  Mod(ModDeclaration),
-  Fn(FnDeclaration),
-  Err(ParseError),
+impl File {
+  pub fn new() -> File {
+    File {
+      mod_declarations: Vec::new(),
+      use_declarations: Vec::new(),
+      fn_declarations: Vec::new(),
+    }
+  }
 }
 
 #[derive(Debug, PartialEq)]
@@ -34,7 +37,7 @@ pub enum UseTree {
 
 #[derive(Debug, PartialEq)]
 pub struct UseTreeBranch {
-  prefix: Spanned<PathComponent>,
+  prefix: Spanned<Token>,
   children: Vec<Spanned<UseTreeBranchChild>>,
 }
 
@@ -46,55 +49,25 @@ pub struct UseTreeBranchChild {
 
 #[derive(Debug, PartialEq)]
 pub struct Path {
-  components: Vec<Spanned<PathComponent>>,
-}
-
-#[derive(Debug, PartialEq)]
-pub struct PathComponent {
-  name: Spanned<Token>,
-  separator_token: Option<Spanned<Token>>,
+  components: Vec<Spanned<Token>>,
 }
 
 #[derive(Debug, PartialEq)]
 pub struct ModDeclaration {
-  pub mod_token: Spanned<Token>,
   pub name: Spanned<Token>,
-  pub body: Option<ModBody>,
-}
-
-#[derive(Debug, PartialEq)]
-pub struct ModBody {
-  open_brace_token: Spanned<Token>,
-  declarations: Vec<Spanned<Declaration>>,
-  close_brace_token: Spanned<Token>,
+  pub body: Option<File>,
 }
 
 #[derive(Debug, PartialEq)]
 pub struct FnDeclaration {
-  pub fn_token: Spanned<Token>,
   pub name: Spanned<Token>,
-  pub parameters: Spanned<FnParameters>,
-  pub body: Spanned<Block>,
-}
-
-#[derive(Debug, PartialEq)]
-pub struct FnParameters {
-  pub open_paren_token: Spanned<Token>,
-  pub parameters: Vec<Spanned<FnParameter>>,
-  pub close_paren_token: Spanned<Token>,
-}
-
-#[derive(Debug, PartialEq)]
-pub struct FnParameter {
-  pub name: Spanned<Token>,
-  pub comma_token: Option<Spanned<Token>>,
+  pub parameters: Vec<Spanned<Token>>,
+  pub body: Block,
 }
 
 #[derive(Debug, PartialEq)]
 pub struct Block {
-  pub open_brace_token: Spanned<Token>,
-  pub statements: Vec<Spanned<Statement>>,
-  pub close_brace_token: Spanned<Token>,
+  pub statements: Vec<Statement>,
 }
 
 #[derive(Debug, PartialEq)]
@@ -103,147 +76,58 @@ pub enum Statement {
   Expression(ExpressionStatement),
 }
 
-impl Statement {
-  pub fn bind(
-    let_token: Spanned<Token>,
-    mut_token: Option<Spanned<Token>>,
-    pattern: Spanned<Pattern>,
-    equal_token: Spanned<Token>,
-    expression: Spanned<Expression>,
-    semicolon_token: Spanned<Token>,
-  ) -> Statement {
-    Statement::Bind(BindStatement {
-      let_token,
-      mut_token,
-      pattern,
-      equal_token,
-      expression: Box::new(expression),
-      semicolon_token,
-    })
-  }
-
-  pub fn expression(
-    expression: Spanned<Expression>,
-    semicolon_token: Option<Spanned<Token>>,
-  ) -> Statement {
-    Statement::Expression(ExpressionStatement {
-      expression,
-      semicolon_token,
-    })
-  }
-}
-
 #[derive(Debug, PartialEq)]
 pub struct BindStatement {
-  pub let_token: Spanned<Token>,
-  pub mut_token: Option<Spanned<Token>>,
-  pub pattern: Spanned<Pattern>,
-  pub equal_token: Spanned<Token>,
-  pub expression: Box<Spanned<Expression>>,
-  pub semicolon_token: Spanned<Token>,
+  pub is_mut: bool,
+  pub pattern: Pattern,
+  pub expression: Box<Expression>,
 }
 
 #[derive(Debug, PartialEq)]
 pub struct ExpressionStatement {
-  pub expression: Spanned<Expression>,
-  pub semicolon_token: Option<Spanned<Token>>,
+  pub expression: Expression,
+  pub has_semicolon: bool,
 }
 
 #[derive(Debug, PartialEq)]
 pub enum Expression {
-  Literal(LiteralExpression),
+  Literal(Spanned<Token>),
   Unary(UnaryExpression),
   Binary(BinaryExpression),
   If(IfExpression),
   While(WhileExpression),
 }
 
-impl Expression {
-  pub fn int(int: i64) -> Expression {
-    Expression::Literal(LiteralExpression::Int(int))
-  }
-
-  pub fn float(float: f64) -> Expression {
-    Expression::Literal(LiteralExpression::Float(float))
-  }
-
-  pub fn bool(bool: bool) -> Expression {
-    Expression::Literal(LiteralExpression::Bool(bool))
-  }
-
-  pub fn identifier(identifier: String) -> Expression {
-    Expression::Literal(LiteralExpression::Identifier(identifier))
-  }
-
-  pub fn unary(
-    operator_token: Spanned<Token>,
-    operand: Spanned<Expression>,
-  ) -> Expression {
-    Expression::Unary(UnaryExpression {
-      operator_token,
-      operand: Box::new(operand),
-    })
-  }
-
-  pub fn binary(
-    operator_token: Spanned<Token>,
-    left_operand: Spanned<Expression>,
-    right_operand: Spanned<Expression>,
-  ) -> Expression {
-    Expression::Binary(BinaryExpression {
-      operator_token,
-      left_operand: Box::new(left_operand),
-      right_operand: Box::new(right_operand),
-    })
-  }
-}
-
 #[derive(Debug, PartialEq)]
 pub struct UnaryExpression {
-  pub operator_token: Spanned<Token>,
-  pub operand: Box<Spanned<Expression>>,
+  pub operator: Spanned<Token>,
+  pub operand: Box<Expression>,
 }
 
 #[derive(Debug, PartialEq)]
 pub struct BinaryExpression {
-  pub left_operand: Box<Spanned<Expression>>,
-  pub operator_token: Spanned<Token>,
-  pub right_operand: Box<Spanned<Expression>>,
-}
-
-#[derive(Debug, PartialEq)]
-pub enum LiteralExpression {
-  Int(i64),
-  Float(f64),
-  Bool(bool),
-  Identifier(String),
+  pub left_operand: Box<Expression>,
+  pub operator: Spanned<Token>,
+  pub right_operand: Box<Expression>,
 }
 
 #[derive(Debug, PartialEq)]
 pub struct IfExpression {
-  pub if_token: Spanned<Token>,
-  pub condition: Box<Spanned<Expression>>,
-  pub body: Spanned<Block>,
-  pub else_body: Option<Spanned<ElseBody>>,
+  pub condition: Box<Expression>,
+  pub body: Block,
+  pub else_body: Option<ElseBody>,
 }
 
 #[derive(Debug, PartialEq)]
-pub struct ElseBody {
-  pub else_token: Spanned<Token>,
-  pub block: Box<Spanned<ElseBlock>>,
-}
-
-#[derive(Debug, PartialEq)]
-pub enum ElseBlock {
+pub enum ElseBody {
   Else(Block),
-  If(IfExpression),
+  If(Box<IfExpression>),
 }
 
 #[derive(Debug, PartialEq)]
 pub struct WhileExpression {
-  pub while_token: Spanned<Token>,
-  pub condition: Box<Spanned<Expression>>,
-  pub body: Spanned<Block>,
+  pub condition: Box<Expression>,
+  pub body: Block,
 }
 
 #[derive(Debug, PartialEq)]
