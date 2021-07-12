@@ -6,7 +6,7 @@ use oma::{
 use crate::{
   ast::{
     BinaryExpression, BindStatement, Block, ElseBlock, Expression,
-    ExpressionStatement, IfExpression, LiteralExpression, Statement,
+    ExpressionStatement, IfExpression, LiteralExpression, Pattern, Statement,
     UnaryExpression, WhileExpression,
   },
   span::Spanned,
@@ -64,9 +64,7 @@ impl Generator {
     bind_statement: BindStatement,
   ) {
     self.expression(chunk, bind_statement.expression.unwrap());
-    if let Expression::Literal(LiteralExpression::Identifier(identifier)) =
-      bind_statement.pattern.unwrap()
-    {
+    if let Pattern::Identifier(identifier) = bind_statement.pattern.unwrap() {
       chunk.add_local(identifier);
     } else {
       panic!("cannot assign to non-identifier");
@@ -110,7 +108,7 @@ impl Generator {
     self.expression(chunk, binary_expression.left_operand.unwrap());
     self.expression(chunk, binary_expression.right_operand.unwrap());
 
-    let instruction = match binary_expression.operator.base() {
+    let instruction = match binary_expression.operator_token.base() {
       Token::Plus => Instruction::Add,
       Token::Dash => Instruction::Subtract,
       Token::Star => Instruction::Multiply,
@@ -135,7 +133,7 @@ impl Generator {
   ) {
     self.expression(chunk, unary_expression.operand.unwrap());
 
-    let instruction = match unary_expression.operator.base() {
+    let instruction = match unary_expression.operator_token.base() {
       Token::Dash => Instruction::Negate,
       Token::Bang => Instruction::Not,
       _ => unreachable!("invalid operator in unary expression"),
@@ -173,7 +171,7 @@ impl Generator {
     chunk.emit(Instruction::JumpIf);
     let jump_if_offset = chunk.emit_bytes(0u64.to_le_bytes());
 
-    if let Some(else_expression) = if_expression.else_expression {
+    if let Some(else_expression) = if_expression.else_body {
       match else_expression.unwrap().block.unwrap() {
         ElseBlock::If(if_expression) => {
           self.if_expression(chunk, if_expression)
@@ -185,7 +183,7 @@ impl Generator {
     chunk.emit(Instruction::Jump);
     let jump_offset = chunk.emit_bytes(0u64.to_le_bytes());
 
-    self.block(chunk, if_expression.block.unwrap());
+    self.block(chunk, if_expression.body.unwrap());
 
     let u64_bytes_len = 0u64.to_le_bytes().len() as u64;
     chunk.patch_bytes(
@@ -206,7 +204,7 @@ impl Generator {
     chunk.emit(Instruction::JumpIf);
     let jump_if_offset = chunk.emit_bytes(0u64.to_le_bytes());
 
-    self.block(chunk, while_expression.block.unwrap());
+    self.block(chunk, while_expression.body.unwrap());
 
     chunk.emit(Instruction::Pop);
 

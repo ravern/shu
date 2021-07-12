@@ -1,5 +1,6 @@
 use std::{
   cmp::{max, min},
+  fmt,
   rc::Rc,
 };
 
@@ -86,7 +87,7 @@ impl Span {
   }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct Source {
   // TODO: Replace with interned string
   inner: Rc<String>,
@@ -117,5 +118,11 @@ impl Source {
 impl PartialEq for Source {
   fn eq(&self, other: &Self) -> bool {
     Rc::ptr_eq(&self.inner, &other.inner)
+  }
+}
+
+impl fmt::Debug for Source {
+  fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    write!(f, "some source")
   }
 }

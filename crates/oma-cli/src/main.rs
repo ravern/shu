@@ -8,12 +8,16 @@ fn main() {
     fs::read_to_string("examples/test.oma").expect("couldn't read file");
 
   let parser = Parser::new(&source);
-  let generator = Generator::new();
-  let mut machine = Machine::new();
 
-  let chunk = generator.generate(parser.parse());
-  println!("{}", chunk);
+  // let generator = Generator::new();
+  // let mut machine = Machine::new();
 
-  let result = machine.execute(&chunk).expect("execution error");
-  println!("{}", result);
+  let file = parser.parse();
+  println!("{:#?}", file);
+
+  // let chunk = generator.generate(file);
+  // println!("{}", chunk);
+
+  // let result = machine.execute(&chunk).expect("execution error");
+  // println!("{}", result);
 }

@@ -1,20 +1,14 @@
 use crate::{
   ast::{
-    Block, ElseBlock, ElseExpression, Expression, ExpressionStatement,
-    IfExpression, Statement, WhileExpression,
+    Block, Declaration, ElseBlock, ElseBody, Expression, ExpressionStatement,
+    File, FnDeclaration, FnParameter, FnParameters, IfExpression, ParseError,
+    Pattern, Statement, WhileExpression,
   },
-  lex::{LexError, Lexer},
+  lex::Lexer,
   span::{Source, Span, Spanned},
   token::Token,
 };
 
-#[derive(Debug, PartialEq)]
-pub enum ParseError {
-  Lex(LexError),
-  UnexpectedToken(Token),
-}
-
-// TODO: Convert all parse fns to return `*Expression` instead of `Expression`.
 pub struct Parser {
   lexer: Lexer,
   current: Option<Spanned<Token>>,
@@ -56,10 +50,127 @@ impl Parser {
     self.lexer.source()
   }
 
-  pub fn parse(mut self) -> Spanned<Block> {
-    let block = self.block().unwrap();
-    self.expect(Token::Eof).unwrap();
-    block
+  pub fn parse(mut self) -> Spanned<File> {
+    self.file()
+  }
+
+  fn file(&mut self) -> Spanned<File> {
+    let mut declarations: Vec<Spanned<Declaration>> = Vec::new();
+    loop {
+      match self.peek().map(|token| token.base().clone()) {
+        Ok(Token::Eof) => break,
+        Ok(_) => match self.declaration() {
+          Ok(declaration) => declarations.push(declaration),
+          Err(error) => {
+            self.synchronize();
+            declarations.push(error.map(Declaration::Err));
+          }
+        },
+        Err(error) => {
+          self.synchronize();
+          declarations.push(error.map(Declaration::Err));
+        }
+      }
+    }
+
+    let eof_token = self
+      .expect(Token::Eof)
+      .expect("expected Eof token after all declarations");
+
+    let span = Span::combine(
+      declarations
+        .first()
+        .map(|declaration| declaration.span())
+        .unwrap_or(eof_token.span()),
+      eof_token.span(),
+    );
+    Spanned::new(
+      File {
+        declarations,
+        eof_token,
+      },
+      span,
+    )
+  }
+
+  // TODO: figure out exactly what point we should synchronise
+  fn declaration(
+    &mut self,
+  ) -> Result<Spanned<Declaration>, Spanned<ParseError>> {
+    match self.peek()?.base() {
+      Token::Fn => self.fn_declaration(),
+      _ => {
+        let token = self.advance()?;
+        Err(token.map(ParseError::UnexpectedToken))
+      }
+    }
+  }
+
+  fn fn_declaration(
+    &mut self,
+  ) -> Result<Spanned<Declaration>, Spanned<ParseError>> {
+    let fn_token = self.expect(Token::Fn)?;
+    let name = self.expect(Token::Identifier)?;
+    let parameters = self.fn_parameters()?;
+    let body = self.block()?;
+
+    let span = Span::combine(fn_token.span(), body.span());
+    let declaration = Spanned::new(
+      Declaration::Fn(FnDeclaration {
+        fn_token,
+        name,
+        parameters,
+        body,
+      }),
+      span,
+    );
+    Ok(declaration)
+  }
+
+  fn fn_parameters(
+    &mut self,
+  ) -> Result<Spanned<FnParameters>, Spanned<ParseError>> {
+    let open_paren_token = self.expect(Token::OpenParen)?;
+
+    let mut parameters = Vec::new();
+    loop {
+      if let Token::CloseParen = self.peek()?.base() {
+        break;
+      }
+
+      let name = self.expect(Token::Identifier)?;
+      let comma_token = if let Token::Comma = self.peek()?.base() {
+        Some(self.advance()?)
+      } else {
+        if let Token::CloseParen = self.peek()?.base() {
+          None
+        } else {
+          return Err(self.peek()?.map(ParseError::UnexpectedToken));
+        }
+      };
+
+      let span = if let Some(comma_token) = &comma_token {
+        Span::combine(name.span(), comma_token.span())
+      } else {
+        name.span().clone()
+      };
+      let parameter = FnParameter { name, comma_token };
+
+      parameters.push(Spanned::new(parameter, span));
+    }
+
+    let close_paren_token = self.expect(Token::CloseParen)?;
+
+    let span = Span::combine(open_paren_token.span(), close_paren_token.span());
+    let fn_parameters = Spanned::new(
+      FnParameters {
+        open_paren_token,
+        parameters,
+        close_paren_token,
+      },
+      span,
+    );
+    Ok(fn_parameters)
   }
 
   fn block(&mut self) -> Result<Spanned<Block>, Spanned<ParseError>> {
@@ -112,7 +223,7 @@ impl Parser {
       Token::Mut => Some(self.advance()?),
       _ => None,
     };
-    let pattern = self.literal_expression()?;
+    let pattern = self.pattern()?;
     let equal_token = self.expect(Token::Equal)?;
     let expression = self.expression()?;
     let semicolon_token = self.expect(Token::Semicolon)?;
@@ -164,28 +275,29 @@ impl Parser {
   ) -> Result<Spanned<IfExpression>, Spanned<ParseError>> {
     let if_token = self.expect(Token::If)?;
     let condition = self.expression()?;
-    let block = self.block()?;
-    let else_expression = self.else_expression()?;
-    let span = if let Some(else_expression) = &else_expression {
+    let body = self.block()?;
+    let else_body = self.else_body()?;
+
+    let span = if let Some(else_expression) = &else_body {
       Span::combine(if_token.span(), else_expression.span())
     } else {
-      Span::combine(if_token.span(), block.span())
+      Span::combine(if_token.span(), body.span())
     };
     let expression = Spanned::new(
       IfExpression {
         if_token,
         condition: Box::new(condition),
-        block,
-        else_expression,
+        body,
+        else_body,
       },
       span,
     );
     Ok(expression)
   }
 
-  fn else_expression(
+  fn else_body(
     &mut self,
-  ) -> Result<Option<Spanned<ElseExpression>>, Spanned<ParseError>> {
+  ) -> Result<Option<Spanned<ElseBody>>, Spanned<ParseError>> {
     let else_token = match self.peek()?.base() {
       Token::Else => self.advance()?,
       _ => return Ok(None),
@@ -198,7 +310,7 @@ impl Parser {
 
     let span = Span::combine(else_token.span(), block.span());
     let else_expression = Spanned::new(
-      ElseExpression {
+      ElseBody {
         else_token,
         block: Box::new(block),
       },
@@ -212,14 +324,14 @@ impl Parser {
   ) -> Result<Spanned<WhileExpression>, Spanned<ParseError>> {
     let while_token = self.expect(Token::While)?;
     let condition = self.expression()?;
-    let block = self.block()?;
+    let body = self.block()?;
 
-    let span = Span::combine(while_token.span(), block.span());
+    let span = Span::combine(while_token.span(), body.span());
     let expression = Spanned::new(
       WhileExpression {
         while_token,
         condition: Box::new(condition),
-        block,
+        body,
       },
       span,
     );
@@ -241,7 +353,7 @@ impl Parser {
   ) -> Result<Spanned<Expression>, Spanned<ParseError>> {
     let left_operand = self.comparison_expression()?;
 
-    let operator = match self.peek()?.base() {
+    let operator_token = match self.peek()?.base() {
       Token::EqualEqual | Token::BangEqual => self.advance()?,
       _ => return Ok(left_operand),
     };
@@ -250,7 +362,7 @@ impl Parser {
 
     let span = Span::combine(left_operand.span(), right_operand.span());
     let expression = Spanned::new(
-      Expression::binary(operator, left_operand, right_operand),
+      Expression::binary(operator_token, left_operand, right_operand),
       span,
     );
 
@@ -274,7 +386,7 @@ impl Parser {
   ) -> Result<Spanned<Expression>, Spanned<ParseError>> {
     let left_operand = self.addition_expression()?;
 
-    let operator = match self.peek()?.base() {
+    let operator_token = match self.peek()?.base() {
       Token::Greater | Token::GreaterEqual | Token::Less | Token::LessEqual => {
         self.advance()?
       }
@@ -285,7 +397,7 @@ impl Parser {
 
     let span = Span::combine(left_operand.span(), right_operand.span());
     let expression = Spanned::new(
-      Expression::binary(operator, left_operand, right_operand),
+      Expression::binary(operator_token, left_operand, right_operand),
       span,
     );
 
@@ -329,10 +441,13 @@ impl Parser {
   ) -> Result<Spanned<Expression>, Spanned<ParseError>> {
     match self.peek()?.base() {
       Token::Dash | Token::Bang => {
-        let operator = self.advance()?;
+        let operator_token = self.advance()?;
         let operand = self.unary_expression()?;
-        let span = Span::combine(operator.span(), operand.span());
-        Ok(Spanned::new(Expression::unary(operator, operand), span))
+        let span = Span::combine(operator_token.span(), operand.span());
+        Ok(Spanned::new(
+          Expression::unary(operator_token, operand),
+          span,
+        ))
       }
       Token::OpenParen => {
         let open_paren = self.advance()?;
@@ -354,9 +469,14 @@ impl Parser {
     match self.peek()?.base() {
       Token::Int => {
         let int = self.advance()?;
-        // TODO: Check for integer overflow and parse as float instead.
         let expression = Spanned::new(
-          Expression::int(int.span().as_str().parse().unwrap()),
+          int
+            .span()
+            .as_str()
+            .parse()
+            .map(Expression::int)
+            .or_else(|_| int.span().as_str().parse().map(Expression::float))
+            .unwrap(),
           int.span().clone(),
         );
         Ok(expression)
@@ -393,6 +513,70 @@ impl Parser {
         let token = self.advance()?;
         Err(token.map(ParseError::UnexpectedToken))
       }
+    }
+  }
+
+  fn pattern(&mut self) -> Result<Spanned<Pattern>, Spanned<ParseError>> {
+    match self.peek()?.base() {
+      Token::Int => {
+        let int = self.advance()?;
+        let expression = Spanned::new(
+          int
+            .span()
+            .as_str()
+            .parse()
+            .map(Pattern::Int)
+            .or_else(|_| int.span().as_str().parse().map(Pattern::Float))
+            .unwrap(),
+          int.span().clone(),
+        );
+        Ok(expression)
+      }
+      Token::Float => {
+        let float = self.advance()?;
+        let expression = Spanned::new(
+          Pattern::Float(float.span().as_str().parse().unwrap()),
+          float.span().clone(),
+        );
+        Ok(expression)
+      }
+      Token::True => {
+        let bool = self.advance()?;
+        let expression = Spanned::new(Pattern::Bool(true), bool.span().clone());
+        Ok(expression)
+      }
+      Token::False => {
+        let bool = self.advance()?;
+        let expression =
+          Spanned::new(Pattern::Bool(false), bool.span().clone());
+        Ok(expression)
+      }
+      Token::Identifier => {
+        let identifier = self.advance()?;
+        let expression = Spanned::new(
+          Pattern::Identifier(identifier.span().as_str().to_string()),
+          identifier.span().clone(),
+        );
+        Ok(expression)
+      }
+      _ => {
+        let token = self.advance()?;
+        Err(token.map(ParseError::UnexpectedToken))
+      }
+    }
+  }
+
+  fn synchronize(&mut self) {
+    loop {
+      if let Ok(Token::Fn | Token::Mod | Token::Eof) =
+        self.peek().map(|token| token.base().clone())
+      {
+        return;
+      }
+      // TODO: improve error message
+      self
+        .advance()
+        .expect("earlier peek was fine, expected advance to be fine as well");
     }
   }
 
