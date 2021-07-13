@@ -292,7 +292,7 @@ impl Parser {
 
     self.expect(Token::Equal)?;
 
-    let expression = Box::new(self.expression()?);
+    let expression = self.expression()?;
 
     self.expect(Token::Semicolon)?;
 

@@ -53,13 +53,31 @@ pub struct ExpressionStatement {
 
 #[derive(Debug)]
 pub enum Expression {
+  Block(Block),
   Literal(LiteralExpression),
   Path(Path),
+  Access(AccessExpression),
+  Call(CallExpression),
 }
 
 #[derive(Debug)]
 pub enum LiteralExpression {
+  Int(i64),
+  Float(i64),
+  Bool(bool),
   Identifier(usize),
+}
+
+#[derive(Debug)]
+pub struct AccessExpression {
+  pub receiver: Box<Expression>,
+  pub field: usize,
+}
+
+#[derive(Debug)]
+pub struct CallExpression {
+  pub receiver: Box<Expression>,
+  pub arguments: Vec<Expression>,
 }
 
 #[derive(Debug)]

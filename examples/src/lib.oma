@@ -1,9 +1,6 @@
-mod foo {
-  fn bar(baz) {
-    2 + 30
-  }
-}
+mod foo;
 
 fn main() {
-  1 + 2
+  foo::bar();
+  foo.bar();
 }

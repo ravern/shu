@@ -1,8 +1,0 @@
-mod parse;
-mod lex;
-
-fn main() {
-  hello()();
-  hello::world();
-}
-

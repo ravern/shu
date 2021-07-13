@@ -57,7 +57,7 @@ pub enum Statement {
 pub struct BindStatement {
   pub is_mut: bool,
   pub pattern: Pattern,
-  pub expression: Box<Expression>,
+  pub expression: Expression,
 }
 
 #[derive(Debug, PartialEq)]

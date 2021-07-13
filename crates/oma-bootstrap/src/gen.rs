@@ -63,7 +63,7 @@ impl Generator {
     chunk: &mut Chunk,
     bind_statement: BindStatement,
   ) {
-    self.expression(chunk, *bind_statement.expression);
+    self.expression(chunk, bind_statement.expression);
     if let Pattern::Literal(token) = bind_statement.pattern {
       if let Token::Identifier = token.base() {
         chunk.add_local(token.span().as_str().to_string());

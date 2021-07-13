@@ -2,9 +2,14 @@ use std::{collections::HashMap, fs, io};
 
 use crate::{
   ast,
-  ir::{Block, Chunk, Executable, ModHeader, PackageHeader, Path},
+  ir::{
+    AccessExpression, BindStatement, Block, CallExpression, Chunk, Executable,
+    Expression, ExpressionStatement, LiteralExpression, ModHeader,
+    PackageHeader, Path, Statement,
+  },
   parse::{ParseError, Parser},
   span::Spanned,
+  token::Token,
 };
 
 #[derive(Debug)]
@@ -131,14 +136,217 @@ impl Compiler {
       .map(|token| self.add_identifier(token.span().to_string()))
       .collect();
 
-    let chunk = self.add_chunk(Chunk {
-      parameters,
-      body: Block {
-        statements: Vec::new(),
-      },
-    });
+    let body = self.block(fn_declaration.body)?;
+
+    let chunk = self.add_chunk(Chunk { parameters, body });
 
     Ok(chunk)
+  }
+
+  fn block(&mut self, block: ast::Block) -> Result<Block, CompileError> {
+    Ok(Block {
+      statements: block
+        .statements
+        .into_iter()
+        .map(|statement| self.statement(statement))
+        .collect::<Result<Vec<Vec<Statement>>, CompileError>>()?
+        .into_iter()
+        .flatten()
+        .collect(),
+    })
+  }
+
+  fn statement(
+    &mut self,
+    statement: ast::Statement,
+  ) -> Result<Vec<Statement>, CompileError> {
+    match statement {
+      ast::Statement::Bind(bind_statement) => {
+        self.bind_statement(bind_statement)
+      }
+      ast::Statement::Expression(expression_statement) => Ok(
+        self
+          .expression_statement(expression_statement)?
+          .into_iter()
+          .map(Statement::Expression)
+          .collect(),
+      ),
+    }
+  }
+
+  fn bind_statement(
+    &mut self,
+    bind_statement: ast::BindStatement,
+  ) -> Result<Vec<Statement>, CompileError> {
+    match bind_statement.pattern {
+      ast::Pattern::Literal(token) => match token.base() {
+        Token::Identifier => {
+          let name = self.add_identifier(token.span().to_string());
+          let expression = expression_or_expressions(
+            self.expression(bind_statement.expression)?,
+          );
+          Ok(vec![Statement::Bind(BindStatement {
+            is_mut: bind_statement.is_mut,
+            name,
+            expression,
+          })])
+        }
+        _ => unreachable!(),
+      },
+      _ => unreachable!(),
+    }
+  }
+
+  fn expression_statement(
+    &mut self,
+    expression_statement: ast::ExpressionStatement,
+  ) -> Result<Vec<ExpressionStatement>, CompileError> {
+    Ok(
+      self
+        .expression(expression_statement.expression)?
+        .into_iter()
+        .map(|expression| ExpressionStatement { expression })
+        .collect(),
+    )
+  }
+
+  fn expression(
+    &mut self,
+    expression: ast::Expression,
+  ) -> Result<Vec<Expression>, CompileError> {
+    match expression {
+      ast::Expression::Literal(token) => {
+        self.literal_expression(token).map(|literal_expression| {
+          vec![Expression::Literal(literal_expression)]
+        })
+      }
+      ast::Expression::Path(path) => self
+        .path_expression(path)
+        .map(|path| vec![Expression::Path(path)]),
+      ast::Expression::Access(access_expression) => self
+        .access_expression(access_expression)
+        .map(|access_expression| vec![Expression::Access(access_expression)]),
+      ast::Expression::Call(call_expression) => self
+        .call_expression(call_expression)
+        .map(|call_expression| vec![Expression::Call(call_expression)]),
+      ast::Expression::Unary(unary_expression) => self
+        .unary_expression(unary_expression)
+        .map(|unary_expression| vec![]),
+      ast::Expression::Binary(binary_expression) => self
+        .binary_expression(binary_expression)
+        .map(|binary_expression| vec![]),
+      ast::Expression::Assign(assign_expression) => self
+        .assign_expression(assign_expression)
+        .map(|assign_expression| vec![]),
+      ast::Expression::If(if_expression) => self
+        .if_expression(if_expression)
+        .map(|if_expression| vec![]),
+      ast::Expression::While(while_expression) => self
+        .while_expression(while_expression)
+        .map(|while_expression| vec![]),
+    }
+  }
+
+  fn literal_expression(
+    &mut self,
+    token: Spanned<Token>,
+  ) -> Result<LiteralExpression, CompileError> {
+    match token.base() {
+      Token::Int => Ok(LiteralExpression::Int(
+        token.span().as_str().parse().unwrap(),
+      )),
+      Token::Float => Ok(LiteralExpression::Float(
+        token.span().as_str().parse().unwrap(),
+      )),
+      Token::True => Ok(LiteralExpression::Bool(true)),
+      Token::False => Ok(LiteralExpression::Bool(false)),
+      Token::Identifier => Ok(LiteralExpression::Identifier(
+        self.add_identifier(token.span().to_string()),
+      )),
+      _ => unreachable!(),
+    }
+  }
+
+  fn path_expression(&mut self, path: ast::Path) -> Result<Path, CompileError> {
+    Ok(Path {
+      components: path
+        .components
+        .into_iter()
+        .map(|token| self.add_identifier(token.span().to_string()))
+        .collect(),
+    })
+  }
+
+  fn access_expression(
+    &mut self,
+    access_expression: ast::AccessExpression,
+  ) -> Result<AccessExpression, CompileError> {
+    let receiver = Box::new(expression_or_expressions(
+      self.expression(*access_expression.receiver)?,
+    ));
+
+    Ok(AccessExpression {
+      receiver,
+      field: self.add_identifier(access_expression.field.span().to_string()),
+    })
+  }
+
+  fn call_expression(
+    &mut self,
+    call_expression: ast::CallExpression,
+  ) -> Result<CallExpression, CompileError> {
+    let receiver = Box::new(expression_or_expressions(
+      self.expression(*call_expression.receiver)?,
+    ));
+
+    let arguments = call_expression
+      .arguments
+      .into_iter()
+      .map(|expression| self.expression(expression))
+      .collect::<Result<Vec<Vec<Expression>>, CompileError>>()?
+      .into_iter()
+      .map(expression_or_expressions)
+      .collect();
+
+    Ok(CallExpression {
+      receiver,
+      arguments,
+    })
+  }
+
+  fn unary_expression(
+    &mut self,
+    unary_expression: ast::UnaryExpression,
+  ) -> Result<Expression, CompileError> {
+    unimplemented!();
+  }
+
+  fn binary_expression(
+    &mut self,
+    binary_expression: ast::BinaryExpression,
+  ) -> Result<Expression, CompileError> {
+    unimplemented!();
+  }
+
+  fn assign_expression(
+    &mut self,
+    assign_expression: ast::AssignExpression,
+  ) -> Result<Expression, CompileError> {
+    unimplemented!();
+  }
+
+  fn if_expression(
+    &mut self,
+    if_expression: ast::IfExpression,
+  ) -> Result<Expression, CompileError> {
+    unimplemented!();
+  }
+
+  fn while_expression(
+    &mut self,
+    while_expression: ast::WhileExpression,
+  ) -> Result<Expression, CompileError> {
+    unimplemented!();
   }
 
   fn use_declaration(
@@ -201,5 +409,20 @@ impl Compiler {
       self.identifiers.insert(identifier, self.identifiers.len());
       self.identifiers.len() - 1
     }
+  }
+}
+
+fn expression_or_expressions(mut expressions: Vec<Expression>) -> Expression {
+  if expressions.len() == 1 {
+    expressions.pop().unwrap()
+  } else {
+    Expression::Block(Block {
+      statements: expressions
+        .into_iter()
+        .map(|expression| {
+          Statement::Expression(ExpressionStatement { expression })
+        })
+        .collect(),
+    })
   }
 }
