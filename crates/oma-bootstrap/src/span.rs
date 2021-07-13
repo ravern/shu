@@ -85,6 +85,10 @@ impl Span {
   pub fn as_str(&self) -> &str {
     self.source.slice(self.start, self.end)
   }
+
+  pub fn to_string(&self) -> String {
+    self.as_str().to_string()
+  }
 }
 
 impl fmt::Debug for Span {

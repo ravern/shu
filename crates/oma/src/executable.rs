@@ -21,6 +21,12 @@ pub struct Executable {
   chunks: Vec<Chunk>,
 }
 
+impl Executable {
+  pub fn new() -> Executable {
+    Executable { chunks: Vec::new() }
+  }
+}
+
 #[derive(Debug, PartialEq)]
 pub struct Chunk {
   locals: HashMap<String, usize>,

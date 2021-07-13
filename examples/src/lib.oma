@@ -1,0 +1,9 @@
+mod foo {
+  fn bar(baz) {
+    2 + 30
+  }
+}
+
+fn main() {
+  1 + 2
+}
