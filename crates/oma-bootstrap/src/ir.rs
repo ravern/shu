@@ -58,6 +58,10 @@ pub enum Expression {
   Path(Path),
   Access(AccessExpression),
   Call(CallExpression),
+  Unary(UnaryExpression),
+  Binary(BinaryExpression),
+  If(IfExpression),
+  While(WhileExpression),
 }
 
 #[derive(Debug)]
@@ -78,6 +82,59 @@ pub struct AccessExpression {
 pub struct CallExpression {
   pub receiver: Box<Expression>,
   pub arguments: Vec<Expression>,
+}
+
+#[derive(Debug)]
+pub struct UnaryExpression {
+  pub operator: UnaryOperator,
+  pub operand: Box<Expression>,
+}
+
+#[derive(Debug)]
+pub enum UnaryOperator {
+  Negate,
+  Not,
+}
+
+#[derive(Debug)]
+pub struct BinaryExpression {
+  pub left_operand: Box<Expression>,
+  pub operator: BinaryOperator,
+  pub right_operand: Box<Expression>,
+}
+
+#[derive(Debug)]
+pub enum BinaryOperator {
+  And,
+  Or,
+  Greater,
+  GreaterEqual,
+  Less,
+  LessEqual,
+  Equal,
+  Add,
+  Subtract,
+  Multiply,
+  Divide,
+}
+
+#[derive(Debug)]
+pub struct IfExpression {
+  pub condition: Box<Expression>,
+  pub body: Block,
+  pub else_body: Option<ElseBody>,
+}
+
+#[derive(Debug)]
+pub enum ElseBody {
+  Else(Block),
+  If(Box<IfExpression>),
+}
+
+#[derive(Debug)]
+pub struct WhileExpression {
+  pub condition: Box<Expression>,
+  pub body: Block,
 }
 
 #[derive(Debug)]

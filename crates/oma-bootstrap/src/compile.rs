@@ -3,9 +3,11 @@ use std::{collections::HashMap, fs, io};
 use crate::{
   ast,
   ir::{
-    AccessExpression, BindStatement, Block, CallExpression, Chunk, Executable,
-    Expression, ExpressionStatement, LiteralExpression, ModHeader,
-    PackageHeader, Path, Statement,
+    AccessExpression, BinaryExpression, BinaryOperator, BindStatement, Block,
+    CallExpression, Chunk, ElseBody, Executable, Expression,
+    ExpressionStatement, IfExpression, LiteralExpression, ModHeader,
+    PackageHeader, Path, Statement, UnaryExpression, UnaryOperator,
+    WhileExpression,
   },
   parse::{ParseError, Parser},
   span::Spanned,
@@ -36,7 +38,7 @@ impl Compiler {
     let source =
       fs::read_to_string("examples/src/lib.oma").map_err(CompileError::Io)?;
     let parser = Parser::new(&source);
-    let file = parser.parse().map_err(CompileError::Parse)?;
+    let file = dbg!(parser.parse().map_err(CompileError::Parse)?);
 
     let package_header = self.package_header(file)?;
 
@@ -231,19 +233,19 @@ impl Compiler {
         .map(|call_expression| vec![Expression::Call(call_expression)]),
       ast::Expression::Unary(unary_expression) => self
         .unary_expression(unary_expression)
-        .map(|unary_expression| vec![]),
+        .map(|unary_expression| vec![Expression::Unary(unary_expression)]),
       ast::Expression::Binary(binary_expression) => self
         .binary_expression(binary_expression)
-        .map(|binary_expression| vec![]),
+        .map(|binary_expression| vec![Expression::Binary(binary_expression)]),
       ast::Expression::Assign(assign_expression) => self
         .assign_expression(assign_expression)
         .map(|assign_expression| vec![]),
       ast::Expression::If(if_expression) => self
         .if_expression(if_expression)
-        .map(|if_expression| vec![]),
+        .map(|if_expression| vec![Expression::If(if_expression)]),
       ast::Expression::While(while_expression) => self
         .while_expression(while_expression)
-        .map(|while_expression| vec![]),
+        .map(|while_expression| vec![Expression::While(while_expression)]),
     }
   }
 
@@ -317,20 +319,57 @@ impl Compiler {
   fn unary_expression(
     &mut self,
     unary_expression: ast::UnaryExpression,
-  ) -> Result<Expression, CompileError> {
-    unimplemented!();
+  ) -> Result<UnaryExpression, CompileError> {
+    let operator = match unary_expression.operator.base() {
+      Token::Dash => UnaryOperator::Negate,
+      Token::Bang => UnaryOperator::Not,
+      _ => unreachable!(),
+    };
+
+    let operand = Box::new(expression_or_expressions(
+      self.expression(*unary_expression.operand)?,
+    ));
+
+    Ok(UnaryExpression { operator, operand })
   }
 
   fn binary_expression(
     &mut self,
     binary_expression: ast::BinaryExpression,
-  ) -> Result<Expression, CompileError> {
-    unimplemented!();
+  ) -> Result<BinaryExpression, CompileError> {
+    let left_operand = Box::new(expression_or_expressions(
+      self.expression(*binary_expression.left_operand)?,
+    ));
+
+    let operator = match binary_expression.operator.base() {
+      Token::AmpAmp => BinaryOperator::And,
+      Token::PipePipe => BinaryOperator::Or,
+      Token::Greater => BinaryOperator::Greater,
+      Token::GreaterEqual => BinaryOperator::GreaterEqual,
+      Token::Less => BinaryOperator::Less,
+      Token::LessEqual => BinaryOperator::LessEqual,
+      Token::EqualEqual => BinaryOperator::Equal,
+      Token::Plus => BinaryOperator::Add,
+      Token::Dash => BinaryOperator::Subtract,
+      Token::Star => BinaryOperator::Multiply,
+      Token::Slash => BinaryOperator::Divide,
+      _ => unreachable!(),
+    };
+
+    let right_operand = Box::new(expression_or_expressions(
+      self.expression(*binary_expression.right_operand)?,
+    ));
+
+    Ok(BinaryExpression {
+      left_operand,
+      operator,
+      right_operand,
+    })
   }
 
   fn assign_expression(
     &mut self,
-    assign_expression: ast::AssignExpression,
+    _assign_expression: ast::AssignExpression,
   ) -> Result<Expression, CompileError> {
     unimplemented!();
   }
@@ -338,15 +377,46 @@ impl Compiler {
   fn if_expression(
     &mut self,
     if_expression: ast::IfExpression,
-  ) -> Result<Expression, CompileError> {
-    unimplemented!();
+  ) -> Result<IfExpression, CompileError> {
+    let condition = Box::new(expression_or_expressions(
+      self.expression(*if_expression.condition)?,
+    ));
+    let body = self.block(if_expression.body)?;
+    let else_body = if_expression
+      .else_body
+      .map(|else_body| self.else_body(else_body))
+      .transpose()?;
+
+    Ok(IfExpression {
+      condition,
+      body,
+      else_body,
+    })
+  }
+
+  fn else_body(
+    &mut self,
+    else_body: ast::ElseBody,
+  ) -> Result<ElseBody, CompileError> {
+    match else_body {
+      ast::ElseBody::Else(block) => self.block(block).map(ElseBody::Else),
+      ast::ElseBody::If(if_expression) => self
+        .if_expression(*if_expression)
+        .map(Box::new)
+        .map(ElseBody::If),
+    }
   }
 
   fn while_expression(
     &mut self,
     while_expression: ast::WhileExpression,
-  ) -> Result<Expression, CompileError> {
-    unimplemented!();
+  ) -> Result<WhileExpression, CompileError> {
+    let condition = Box::new(expression_or_expressions(
+      self.expression(*while_expression.condition)?,
+    ));
+    let body = self.block(while_expression.body)?;
+
+    Ok(WhileExpression { condition, body })
   }
 
   fn use_declaration(

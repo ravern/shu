@@ -384,9 +384,7 @@ impl Parser {
     let left_operand = Box::new(self.comparison_expression()?);
 
     let operator = match self.peek()?.base() {
-      Token::Greater | Token::GreaterEqual | Token::Less | Token::LessEqual => {
-        self.advance()?
-      }
+      Token::EqualEqual => self.advance()?,
       _ => return Ok(*left_operand),
     };
 
@@ -400,7 +398,7 @@ impl Parser {
 
     let token = self.peek()?;
     match token.base() {
-      Token::Greater | Token::GreaterEqual | Token::Less | Token::LessEqual => {
+      Token::EqualEqual => {
         let span = token.span().clone();
         return Err(Spanned::new(
           ParseError::UnexpectedToken(token.unwrap()),

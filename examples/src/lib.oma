@@ -1,6 +1,11 @@
 mod foo;
 
 fn main() {
-  foo::bar();
-  foo.bar();
+  if foo.bar(baz) {
+    false
+  } else if one.two(three) {
+    true
+  } else {
+    1
+  }
 }
